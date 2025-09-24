@@ -161,6 +161,9 @@ async function handleSubmenuCelular(sock, jid, comando, atendimentos) {
 /**
  * Handler do submenu de teste
  */
+/**
+ * Handler do submenu de teste
+ */
 async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const tipo = comando === '1' ? 'COM_ADULTO' : comando === '2' ? 'SEM_ADULTO' : null;
     if (!tipo) return await enviarMensagemErro(sock, jid);
@@ -174,14 +177,24 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     while(tentativa < 3 && !sucesso){
         try {
             console.log(`📡 Tentativa ${tentativa + 1} - Requisição API: ${aparelho} - ${tipo}`);
+
+            // Envia mensagem de download antes do teste
+            if (aparelho === 'ANDROID' || aparelho === 'TVBOX') {
+                await sock.sendMessage(jid, { text: mensagens.downloadAndroidTVBox });
+            } else if (aparelho === 'SMARTTV') {
+                await sock.sendMessage(jid, { text: mensagens.downloadSmartTV });
+            } else if (aparelho === 'IOS') {
+                await sock.sendMessage(jid, { text: mensagens.downloadIOS });
+            }
+
+            // Faz a requisição do teste
             const response = await axios.post(apiURL, {}, { timeout: 10000 });
-            
             await sock.sendMessage(jid, { text: response.data });
 
             // Atualiza último teste só se sucesso
             atendimentos[jid].ultimoTeste = new Date();
             sucesso = true;
-            atendimentos[jid].fase = 'menu_principal'; // volta ao menu principal
+            atendimentos[jid].fase = 'menu_principal';
             console.log(`✅ Teste enviado com sucesso para ${jid}`);
         } catch (error) {
             tentativa++;
@@ -196,7 +209,6 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
         }
     }
 }
-
 
 module.exports = {
     enviarMenuPrincipal,
