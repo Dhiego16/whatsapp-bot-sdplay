@@ -1,7 +1,6 @@
-// src/mensagens.js
-
+// mensagens.js
 module.exports = {
-  menuPrincipal: `🤖 Olá! Bem-vindo ao atendimento automático da SD PLAY
+    menuPrincipal: `🤖 Olá! Bem-vindo ao atendimento automático da SD PLAY
 📺 Planos a partir de R$20/mês
 
 Escolha o que quer fazer:
@@ -11,7 +10,9 @@ Escolha o que quer fazer:
 
 💡 Responda apenas com 1, 2 ou 3`,
 
-  submenuTeste: `🤖 Atendimento automático SD PLAY
+    avisoInvalido: '❌ Opção inválida. Responda apenas com os números do menu.',
+
+    submenuTeste: `🤖 Atendimento automático SD PLAY
 
 ➡️ Escolha o tipo de teste:
 1️⃣ Teste com Adultos
@@ -20,17 +21,17 @@ Escolha o que quer fazer:
 💡 Responda apenas com 1 ou 2
 💡 Digite "Menu" para voltar ao início`,
 
-  submenuAparelho: `🤖 Atendimento automático SD PLAY
+    submenuAparelho: `🤖 Atendimento automático SD PLAY
 
 ➡️ Escolha seu aparelho:
 1️⃣ Smart TV
 2️⃣ TV Box
-3️⃣ Celular (Android / iOS)
+3️⃣ Celular
 
 💡 Responda apenas com 1, 2 ou 3
 💡 Digite "Menu" para voltar ao início`,
 
-  submenuSmartTV: `🤖 Atendimento automático SD PLAY
+    submenuSmartTV: `🤖 Atendimento automático SD PLAY
 
 ➡️ Escolha a marca da Smart TV:
 1️⃣ Samsung, LG, Roku, TCL
@@ -39,7 +40,7 @@ Escolha o que quer fazer:
 💡 Responda apenas com 1 ou 2
 💡 Digite "Menu" para voltar ao início`,
 
-  submenuCelular: `🤖 Atendimento automático SD PLAY
+    submenuCelular: `🤖 Atendimento automático SD PLAY
 
 ➡️ Escolha seu sistema:
 1️⃣ Android
@@ -48,6 +49,22 @@ Escolha o que quer fazer:
 💡 Responda apenas com 1 ou 2
 💡 Digite "Menu" para voltar ao início`,
 
-  avisoInvalido: '❌ Opção inválida. Responda apenas com os números do menu',
-  erroAPI: '❌ Erro ao buscar os dados do teste. Tente novamente em alguns instantes.'
+    // Mensagens dos apps por aparelho
+    appSmartTV: `⬇️ **BAIXE O APP**
+📺 App Assist+ para Smart TV (Samsung / LG / Roku / TCL)
+- Baixe o aplicativo *Assist Plus* direto na sua TV`,
+
+    appTVBox: `⬇️ **BAIXE O APP PELO NAVEGADOR**
+📱 App IPTV para TV Box
+- Baixe o aplicativo *IPTV P2BIT IBO PRO*
+🔗 Link: http://aftv.news/5218118`,
+
+    appAndroid: `⬇️ **BAIXE O APP PELO NAVEGADOR**
+📱 App IPTV para TV Box ou Celular
+- Baixe o aplicativo *IPTV P2BIT IBO PRO*
+🔗 Link: http://aftv.news/5218118`,
+
+    appIOS: `⬇️ **BAIXE O APP**
+📱 App Assist+ para iOS
+- Baixe o aplicativo *Assist Plus* direto pela App Store`
 };
