@@ -171,30 +171,38 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const aparelho = atendimentos[jid].aparelho;
     const apiURL = aparelho === 'SMARTTV' ? API.SMARTTV[tipo] : API.ANDROID_TVBOX[tipo];
 
+    // Envia mensagem de download antes do teste
+    let mensagemDownload = '';
+    switch(aparelho) {
+        case 'ANDROID':
+        case 'TVBOX':
+            mensagemDownload = mensagens.downloadAndroidTVBox;
+            break;
+        case 'SMARTTV':
+            mensagemDownload = mensagens.downloadSmartTV;
+            break;
+        case 'IOS':
+            mensagemDownload = mensagens.downloadIOS;
+            break;
+    }
+    await sock.sendMessage(jid, { text: mensagemDownload });
+
     let tentativa = 0;
     let sucesso = false;
 
     while(tentativa < 3 && !sucesso){
         try {
             console.log(`📡 Tentativa ${tentativa + 1} - Requisição API: ${aparelho} - ${tipo}`);
-
-            // Envia mensagem de download antes do teste
-            if (aparelho === 'ANDROID' || aparelho === 'TVBOX') {
-                await sock.sendMessage(jid, { text: mensagens.downloadAndroidTVBox });
-            } else if (aparelho === 'SMARTTV') {
-                await sock.sendMessage(jid, { text: mensagens.downloadSmartTV });
-            } else if (aparelho === 'IOS') {
-                await sock.sendMessage(jid, { text: mensagens.downloadIOS });
-            }
-
-            // Faz a requisição do teste
             const response = await axios.post(apiURL, {}, { timeout: 10000 });
-            await sock.sendMessage(jid, { text: response.data });
+            
+            // garante que é string antes de enviar
+            const mensagemTeste = response.data ? String(response.data) : '❌ Sem dados da API.';
+            await sock.sendMessage(jid, { text: mensagemTeste });
 
             // Atualiza último teste só se sucesso
             atendimentos[jid].ultimoTeste = new Date();
             sucesso = true;
-            atendimentos[jid].fase = 'menu_principal';
+            atendimentos[jid].fase = 'menu_principal'; // volta ao menu principal
             console.log(`✅ Teste enviado com sucesso para ${jid}`);
         } catch (error) {
             tentativa++;
