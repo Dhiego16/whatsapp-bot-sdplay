@@ -76,6 +76,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
         case '1':
             // Checa limite de 30 dias
             if (ultimoTeste && diffDias < 30) {
+                return await sock.sendMessage(jid, {
                 await sock.sendMessage(jid, {
                     text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas 20$/Mês 🔥`
                 });
@@ -83,11 +84,19 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
                 return;
             }
 
+            // Marca a data do teste
+            atendimentos[jid].ultimoTeste = hoje;
+
+            // Continua pro submenu de aparelhos
            // Continua pro submenu de aparelhos
             atendimentos[jid].fase = 'submenu_aparelho';
             return await sock.sendMessage(jid, { text: mensagens.submenuAparelho });
 
         case '2':
+    atendimentos[jid].ativo = false; // desativa o bot pra esse usuário
+    return await sock.sendMessage(jid, { 
+        text: '💬 Tire suas dúvidas com um atendente.\n💡 Digite "Menu" para voltar ao início.' 
+    });
             atendimentos[jid].ativo = false; // desativa o bot pra esse usuário
             return await sock.sendMessage(jid, { 
                 text: '💬 Tire suas dúvidas com um atendente.\n💡 Digite "Menu" para voltar ao início.' 
@@ -100,11 +109,16 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             });
 
         default:
+            // Opção inválida: envia aviso e menu juntos
+            await enviarAvisoMenuPrincipal(sock, jid);
+            return await enviarMenuPrincipal(sock, jid);
             // Mantém fase ativa e envia apenas aviso
             await sock.sendMessage(jid, { text: mensagens.avisoInvalido });
             return;
     }
 }
+
+
 /**
  * Handler do submenu de aparelhos
  */
@@ -168,6 +182,19 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const aparelho = atendimentos[jid].aparelho;
     const apiURL = aparelho === 'SMARTTV' ? API.SMARTTV[tipo] : API.ANDROID_TVBOX[tipo];
 
+    try {
+        console.log(`📡 Fazendo requisição para API: ${aparelho} - ${tipo}`);
+        const response = await axios.post(apiURL, {}, { timeout: 10000 });
+        
+        await sock.sendMessage(jid, { text: response.data });
+        atendimentos[jid].fase = 'menu_principal'; // Volta ao menu principal
+        
+        console.log(`✅ Teste enviado com sucesso para ${jid}`);
+    } catch (error) {
+        console.error('❌ Erro ao buscar dados da API:', error.message);
+        await sock.sendMessage(jid, { 
+            text: '❌ Erro ao buscar os dados do teste. Tente novamente em alguns instantes.' 
+        });
     let tentativa = 0;
     let sucesso = false;
 
@@ -207,4 +234,3 @@ module.exports = {
     handleSubmenuSmartTV,
     handleSubmenuCelular,
     handleSubmenuTeste
-};
