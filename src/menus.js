@@ -1,4 +1,5 @@
 const axios = require('axios');
+const mensagens = require('./mensagens');
 const API = require('./api');
 
 /**
@@ -6,9 +7,7 @@ const API = require('./api');
  */
 async function enviarAvisoMenuPrincipal(sock, jid) {
     try {
-        return await sock.sendMessage(jid, { 
-            text: '❌ Opção inválida. Responda apenas com 1️⃣, 2️⃣ ou 3️⃣.' 
-        });
+        return await sock.sendMessage(jid, { text: mensagens.avisoInvalido });
     } catch (error) {
         console.error('Erro ao enviar aviso do menu principal:', error);
     }
@@ -21,15 +20,7 @@ async function enviarAvisoMenuPrincipal(sock, jid) {
 async function enviarMenuPrincipal(sock, jid) {
     try {
         return await sock.sendMessage(jid, {
-            text: `👋 Olá, seja bem-vindo(a) à SD PLAY!
-📺 Trabalhamos com planos acessíveis a partir de R$20/mês.
-
-Para conhecer melhor nossos serviços, você pode:
-1️⃣ Solicitar um Teste Grátis
-2️⃣ Tirar dúvidas sobre os planos
-3️⃣ Falar com um atendente
-
-💡 Responda apenas com 1, 2 ou 3.`
+            text: mensagens.menuPrincipal
         });
     } catch (error) {
         console.error('Erro ao enviar menu principal:', error);
@@ -41,18 +32,13 @@ Para conhecer melhor nossos serviços, você pode:
  */
 async function enviarSubmenuTeste(sock, jid, aparelho) {
     try {
-        await sock.sendMessage(jid, {
-            text: `📌 Escolha o tipo de teste:
-1️⃣ Teste com Adultos
-2️⃣ Teste sem Adultos
-
-💡 Digite "Menu" para voltar ao início.`
-        });
+        await sock.sendMessage(jid, { text: mensagens.submenuTeste });
         return { fase: 'submenu_teste', aparelho };
     } catch (error) {
         console.error('Erro ao enviar submenu teste:', error);
     }
 }
+
 
 /**
  * Envia mensagem de erro padrão
@@ -100,14 +86,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
 
             // Continua pro submenu de aparelhos
             atendimentos[jid].fase = 'submenu_aparelho';
-            return await sock.sendMessage(jid, {
-                text: `📌 Escolha seu aparelho:
-1️⃣ Smart TV
-2️⃣ TV Box
-3️⃣ Celular (Android / iOS)
-
-💡 Digite "Menu" para voltar ao início.`
-            });
+            return await sock.sendMessage(jid, { text: mensagens.submenuAparelho });
 
         case '2':
     atendimentos[jid].ativo = false; // desativa o bot pra esse usuário
@@ -134,26 +113,14 @@ async function handleSubmenuAparelho(sock, jid, comando, atendimentos) {
     switch (comando) {
         case '1': // Smart TV
             atendimentos[jid].fase = 'submenu_smarttv';
-            return await sock.sendMessage(jid, {
-                text: `📌 Escolha a marca da Smart TV:
-1️⃣ Samsung, LG, Roku, Tcl
-2️⃣ Outro
-
-💡 Digite "Menu" para voltar ao início.`
-            });
+            return await sock.sendMessage(jid, { text: mensagens.submenuSmartTV });
         case '2': // TV Box
             const tvboxResult = await enviarSubmenuTeste(sock, jid, 'TVBOX');
             Object.assign(atendimentos[jid], tvboxResult);
             return;
         case '3': // Celular
             atendimentos[jid].fase = 'submenu_celular';
-            return await sock.sendMessage(jid, {
-                text: `📌 Escolha seu sistema:
-1️⃣ Android
-2️⃣ iOS
-
-💡 Digite "Menu" para voltar ao início.`
-            });
+            return await sock.sendMessage(jid, { text: mensagens.submenuCelular });
         default:
             return await enviarMensagemErro(sock, jid);
     }
