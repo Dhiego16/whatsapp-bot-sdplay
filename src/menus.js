@@ -234,3 +234,4 @@ module.exports = {
     handleSubmenuSmartTV,
     handleSubmenuCelular,
     handleSubmenuTeste
+};
