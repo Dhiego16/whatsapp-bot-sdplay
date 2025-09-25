@@ -1,4 +1,4 @@
-const { makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
 const securityMiddleware = require('./security');
@@ -24,27 +24,27 @@ async function startBot(io) {
             ? path.join(SESSIONS_DIR, sessionFiles[0]) 
             : path.join(SESSIONS_DIR, `session-${Date.now()}.json`);
         
-        const { state, saveState } = useSingleFileAuthState(sessionFile);
+        const { state, saveCreds } = await useMultiFileAuthState(SESSIONS_DIR);
 
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            patchMessageBeforeSending: (message) => {
-                const requiresPatch = !!(
-                    message.buttonsMessage ||
-                    message.templateMessage ||
-                    message.listMessage
-                );
-                if (requiresPatch) {
-                    message = { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } };
-                }
-                return message;
-            }
-        });
+const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false,
+    patchMessageBeforeSending: (message) => {
+        const requiresPatch = !!(
+            message.buttonsMessage ||
+            message.templateMessage ||
+            message.listMessage
+        );
+        if (requiresPatch) {
+            message = { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } };
+        }
+        return message;
+    }
+});
 
-        sockInstance = sock;
+sockInstance = sock;
+sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('creds.update', saveState);
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
