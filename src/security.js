@@ -1,15 +1,26 @@
-// Middleware de segurança aprimorado
+// Middleware de segurança: limita spam, bloqueia flood e valida comandos
 const userCommandTimestamps = {};
 const blockedUsers = {};
-const blockedHistory = {};
 
-const COMMAND_LIMIT_PER_MIN = 5;       // Máx comandos por minuto
-const BLOCK_TIME_MS = 5 * 60 * 1000;  // 5 minutos de bloqueio
+// Greenlist dinâmica: números liberados podem ser alterados sem mudar o código
+let greenlist = [
+    '5562998577568@s.whatsapp.net' // Seu número liberado
+];
 
-function securityMiddleware(jid, comando, faseAtual = 'menu_principal') {
+// Configurações
+const COMMAND_LIMIT_PER_MIN = 5; // máximo de comandos por minuto
+const BLOCK_TIME_MS = 5 * 60 * 1000; // 5 minutos de bloqueio
+
+function securityMiddleware(jid, comando) {
     const now = Date.now();
 
-    // Bloqueio ativo?
+    // Log de acesso para números da greenlist
+    if (greenlist.includes(jid)) {
+        console.log(`🟢 [GREENLIST] Usuário ${jid} executou o comando: ${comando}`);
+        return { allowed: true };
+    }
+
+    // Bloqueio temporário
     if (blockedUsers[jid] && blockedUsers[jid] > now) {
         return {
             allowed: false,
@@ -17,46 +28,22 @@ function securityMiddleware(jid, comando, faseAtual = 'menu_principal') {
         };
     }
 
-    // Inicializa histórico
+    // Controle de spam
     userCommandTimestamps[jid] = userCommandTimestamps[jid] || [];
+    userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts < 60 * 1000);
+    userCommandTimestamps[jid].push(now);
 
-    // Remove timestamps antigos (+1 min)
-    userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts.time < 60 * 1000);
-
-    // Bloqueio por comando repetido
-    if (userCommandTimestamps[jid].slice(-3).every(c => c.comando === comando)) {
-        return {
-            allowed: false,
-            message: '⚠️ Você está repetindo o mesmo comando. Espere um pouco.'
-        };
-    }
-
-    // Adiciona o comando atual
-    userCommandTimestamps[jid].push({ comando, time: now, fase: faseAtual });
-
-    // Limites por fase
-    const limits = {
-        menu_principal: 5,
-        submenu_teste: 3,
-        submenu_aparelho: 4
-    };
-    const limit = limits[faseAtual] || COMMAND_LIMIT_PER_MIN;
-
-    if (userCommandTimestamps[jid].length > limit) {
+    if (userCommandTimestamps[jid].length > COMMAND_LIMIT_PER_MIN) {
         blockedUsers[jid] = now + BLOCK_TIME_MS;
-
-        // Histórico de bloqueios
-        blockedHistory[jid] = blockedHistory[jid] || [];
-        blockedHistory[jid].push({ time: now, fase: faseAtual, comando });
-
         userCommandTimestamps[jid] = [];
+        console.log(`⚠️ Usuário ${jid} bloqueado por spam.`);
         return {
             allowed: false,
             message: '⚠️ Você fez muitos comandos em pouco tempo. Bloqueado por 5 minutos.'
         };
     }
 
-    // Validação simples do comando
+    // Validação básica do comando
     if (!comando || !/^[a-zA-Z0-9]/.test(comando)) {
         return {
             allowed: false,
@@ -67,12 +54,19 @@ function securityMiddleware(jid, comando, faseAtual = 'menu_principal') {
     return { allowed: true };
 }
 
-// Limpeza automática de timestamps antigos
-setInterval(() => {
-    const now = Date.now();
-    Object.keys(userCommandTimestamps).forEach(jid => {
-        userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts.time < 60 * 1000);
-    });
-}, 30000);
+// Funções auxiliares para manipular a greenlist
+securityMiddleware.addToGreenlist = (jid) => {
+    if (!greenlist.includes(jid)) {
+        greenlist.push(jid);
+        console.log(`🟢 Usuário ${jid} adicionado à greenlist.`);
+    }
+};
+
+securityMiddleware.removeFromGreenlist = (jid) => {
+    greenlist = greenlist.filter(user => user !== jid);
+    console.log(`🔴 Usuário ${jid} removido da greenlist.`);
+};
+
+securityMiddleware.getGreenlist = () => [...greenlist];
 
 module.exports = securityMiddleware;
