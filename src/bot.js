@@ -13,7 +13,7 @@ const atendimentos = {};
 let sockInstance = null;
 
 // Greenlist - números liberados
-const GREENLIST = ['62998577568'];
+const GREENLIST = ['5562998577568'];
 
 function getSock() {
     return sockInstance;
