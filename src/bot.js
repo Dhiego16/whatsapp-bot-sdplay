@@ -37,6 +37,8 @@ async function startBot(io) {
                 return message;
             }
         });
+    }
+} 
 
         sockInstance = sock;
 
