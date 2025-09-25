@@ -1,9 +1,8 @@
-// server.js
 const express = require('express');
 const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-const { Server } = require('socket.io');
 const { startBot, getSock } = require('./bot');
 
 const app = express();
@@ -15,7 +14,7 @@ const io = new Server(server, {
     }
 });
 
-const AUTH_DIR = './auth_info'; // mesma pasta do bot.js
+const AUTH_DIR = './auth_test';
 const RESET_TOKEN = process.env.RESET_TOKEN || '123456';
 const PORT = process.env.PORT || 3000;
 
@@ -109,4 +108,4 @@ server.listen(PORT, () => {
 });
 
 // Inicia o bot
-startBot(); 
+startBot(io);
