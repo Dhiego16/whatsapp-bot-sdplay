@@ -4,7 +4,9 @@ const {
     handleSubmenuAparelho,
     handleSubmenuSmartTV,
     handleSubmenuCelular,
-    handleSubmenuTeste
+    handleSubmenuTeste,
+    enviarMenuPrincipal,
+    enviarMensagemErro
 } = require('./menus');
 
 module.exports = {
@@ -12,5 +14,7 @@ module.exports = {
     submenu_aparelho: handleSubmenuAparelho,
     submenu_smarttv: handleSubmenuSmartTV,
     submenu_celular: handleSubmenuCelular,
-    submenu_teste: handleSubmenuTeste
+    submenu_teste: handleSubmenuTeste,
+    enviarMenuPrincipal,
+    enviarMensagemErro
 };
