@@ -4,7 +4,7 @@ const blockedUsers = {};
 
 // Greenlist dinâmica: números liberados podem ser alterados sem mudar o código
 let greenlist = [
-    '5562998577568@s.whatsapp.net' // Seu número liberado
+    '556298577568@s.whatsapp.net // Seu número liberado
 ];
 
 // Configurações
@@ -70,3 +70,4 @@ securityMiddleware.removeFromGreenlist = (jid) => {
 securityMiddleware.getGreenlist = () => [...greenlist];
 
 module.exports = securityMiddleware;
+
