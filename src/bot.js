@@ -1,5 +1,4 @@
-const { default: makeWASocket, DisconnectReason, useSingleFileAuthState } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
 const securityMiddleware = require('./security');
@@ -10,6 +9,38 @@ const SESSIONS_DIR = path.join(__dirname, '../auth_test');
 if (!fs.existsSync(SESSIONS_DIR)) {
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 }
+
+const atendimentos = {};
+
+let sockInstance = null;
+
+function getSock() {
+    return sockInstance;
+}
+
+async function startBot(io) {
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState(SESSIONS_DIR);
+
+        const sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            patchMessageBeforeSending: (message) => {
+                const requiresPatch = !!(
+                    message.buttonsMessage ||
+                    message.templateMessage ||
+                    message.listMessage
+                );
+                if (requiresPatch) {
+                    message = { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } };
+                }
+                return message;
+            }
+        });
+
+        sockInstance = sock;
+
+        sock.ev.on('creds.update', saveCreds);
 
 const atendimentos = {};
 
