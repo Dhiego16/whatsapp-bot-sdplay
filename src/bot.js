@@ -2,7 +2,7 @@ const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whis
 const path = require('path');
 const fs = require('fs');
 const securityMiddleware = require('./security');
-const handlers = require('./menus');
+const handlers = require('./handlers');
 const { enviarMenuPrincipal } = require('./menus');
 
 const SESSIONS_DIR = path.join(__dirname, '../auth_test');
