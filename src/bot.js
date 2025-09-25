@@ -1,96 +1,160 @@
-// bot.js
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const { enviarMenuPrincipal } = require('./menus');
-const security = require('./security');
-const handlers = require('./handlers');
+const {
+    enviarMenuPrincipal,
+    handleMenuPrincipal,
+    handleSubmenuAparelho,
+    handleSubmenuSmartTV,
+    handleSubmenuCelular,
+    handleSubmenuTeste
+} = require('./menus');
 
-let sock = null; // guarda a instância do socket
-
+const AUTH_DIR = './auth_test';
+let sock;
 const atendimentos = {};
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+// Mapeamento de handlers por fase
+const handlers = {
+    menu_principal: handleMenuPrincipal,
+    submenu_aparelho: handleSubmenuAparelho,
+    submenu_smarttv: handleSubmenuSmartTV,
+    submenu_celular: handleSubmenuCelular,
+    submenu_teste: handleSubmenuTeste
+};
 
-    sock = makeWASocket({
-        logger: pino({ level: 'silent' }),
-        auth: state
-    });
+/**
+ * Inicializa o bot do WhatsApp
+ */
+async function startBot(io) {
+    try {
+        console.log('🚀 Iniciando bot...');
+        
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+        const { version } = await fetchLatestBaileysVersion();
 
-    sock.ev.on('creds.update', saveCreds);
+        sock = makeWASocket({
+            version,
+            auth: state,
+            printQRInTerminal: false,
+            logger:pino ({ level: 'silent' }) // Remove logs desnecessários
+        });
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            console.log('⚠️ Conexão fechada:', reason);
-            startBot(); // reconecta
-        } else if (connection === 'open') {
-            console.log('✅ Bot conectado com sucesso!');
-        }
-    });
+        sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('messages.upsert', async (msgUpdate) => {
-        const messages = msgUpdate.messages;
-        if (!messages) return;
+        sock.ev.on('connection.update', (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-        for (const msg of messages) {
-            if (!msg.message || !msg.key.remoteJid) continue;
-            const jid = msg.key.remoteJid;
-            const msgContent = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-
-            console.log(`📨 Mensagem recebida de ${jid}: ${msgContent}`);
-
-            if (!security.isGreenlisted(jid)) {
-                console.log(`❌ [SECURITY] Usuário ${jid} não está na greenlist.`);
-                continue;
+            if (qr) {
+                console.log('📱 QR Code gerado. Abra o navegador para escanear.');
+                io.emit('qr', qr);
             }
 
-            if (!atendimentos[jid]) {
-                atendimentos[jid] = {
-                    ativo: true,
-                    fase: 'menu_principal',
-                    aparelho: null,
-                    ultimaInteracao: new Date(),
-                    ultimoTeste: null
-                };
-            }
-
-            const comando = msgContent.trim();
-
-            try {
-                switch (atendimentos[jid].fase) {
-                    case 'menu_principal':
-                        await handlers.handleMenuPrincipal(sock, jid, comando, atendimentos);
-                        break;
-                    case 'submenu_aparelho':
-                        await handlers.handleSubmenuAparelho(sock, jid, comando, atendimentos);
-                        break;
-                    case 'submenu_smarttv':
-                        await handlers.handleSubmenuSmartTV(sock, jid, comando, atendimentos);
-                        break;
-                    case 'submenu_celular':
-                        await handlers.handleSubmenuCelular(sock, jid, comando, atendimentos);
-                        break;
-                    case 'submenu_teste':
-                        await handlers.handleSubmenuTeste(sock, jid, comando, atendimentos);
-                        break;
-                    default:
-                        atendimentos[jid].fase = 'menu_principal';
-                        await enviarMenuPrincipal(sock, jid);
-                        break;
+            if (connection === 'close') {
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
+                console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
+                
+                if (shouldReconnect) {
+                    setTimeout(() => startBot(io), 3000); // Aguarda 3s antes de reconectar
+                } else {
+                    console.log('❌ Você foi deslogado.');
+                    io.emit('disconnected');
                 }
-            } catch (error) {
-                console.error('❌ Erro no handler:', error);
-                await sock.sendMessage(jid, { text: '❌ Ocorreu um erro. Digite "Menu" para voltar ao início.' });
+            } else if (connection === 'open') {
+                console.log('✅ Bot conectado com sucesso!');
+                io.emit('connected');
             }
+        });
+
+        // Handler principal de mensagens
+        sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            if (type !== 'notify') return;
+            
+            const msg = messages[0];
+            if (!msg.message || msg.key.fromMe) return;
+
+            const jid = msg.key.remoteJid;
+            if (jid.endsWith('@g.us')) return;
+            const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+            const comando = texto.toLowerCase().trim();
+
+            console.log(`📨 Mensagem recebida de ${jid}: ${comando}`);
+
+            // Inicializa estado do cliente se não existir
+            if (!atendimentos[jid]) {
+               atendimentos[jid] = { 
+               ativo: true, 
+               fase: 'menu_principal',
+               aparelho: null,
+               ultimaInteracao: new Date()
+           };
+           // Primeira mensagem: envia menu direto, sem aviso de erro
+           return await enviarMenuPrincipal(sock, jid);
+       }
+
+
+            // Atualiza última interação
+            atendimentos[jid].ultimaInteracao = new Date();
+
+            // Comando especial para reativar o bot
+            if (!atendimentos[jid].ativo && comando === 'menu') {
+                atendimentos[jid].ativo = true;
+                atendimentos[jid].fase = 'menu_principal';
+                return await enviarMenuPrincipal(sock, jid);
+            }
+
+            // Se o bot está desativado para este usuário, não responde
+            if (!atendimentos[jid].ativo) return;
+
+            // Comando especial para voltar ao menu principal
+            if (comando === 'menu') {
+                atendimentos[jid].fase = 'menu_principal';
+                return await enviarMenuPrincipal(sock, jid);
+            }
+
+            // Executa o handler apropriado baseado na fase atual
+            const fase = atendimentos[jid].fase;
+            if (handlers[fase]) {
+                try {
+                    await handlers[fase](sock, jid, comando, atendimentos);
+                } catch (error) {
+                    console.error(`❌ Erro no handler ${fase}:`, error);
+                    await sock.sendMessage(jid, { 
+                        text: '❌ Ocorreu um erro. Digite "Menu" para recomeçar.' 
+                    });
+                }
+            } else {
+                console.warn(`⚠️ Handler não encontrado para fase: ${fase}`);
+                await enviarMenuPrincipal(sock, jid);
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao iniciar bot:', error);
+        setTimeout(() => startBot(io), 5000); // Tenta novamente em 5s
+    }
+}
+
+/**
+ * Função para limpar sessões antigas (opcional)
+ */
+function limparSessoesAntigas() {
+    const agora = new Date();
+    const tempoLimite = 30 * 60 * 1000; // 30 minutos
+
+    Object.keys(atendimentos).forEach(jid => {
+        const ultimaInteracao = atendimentos[jid].ultimaInteracao;
+        if (agora - ultimaInteracao > tempoLimite) {
+            delete atendimentos[jid];
+            console.log(`🧹 Sessão limpa para ${jid}`);
         }
     });
 }
 
-// Função para pegar o socket
-function getSock() {
-    return sock;
-}
+// Limpa sessões antigas a cada 10 minutos
+setInterval(limparSessoesAntigas, 10 * 60 * 1000);
 
-module.exports = { startBot, getSock };
+module.exports = { 
+    startBot, 
+    getSock: () => sock,
+    getAtendimentos: () => atendimentos
+};
