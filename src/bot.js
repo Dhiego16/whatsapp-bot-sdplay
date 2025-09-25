@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
 const securityMiddleware = require('./security');
@@ -11,50 +11,6 @@ if (!fs.existsSync(SESSIONS_DIR)) {
 }
 
 const atendimentos = {};
-
-let sockInstance = null;
-
-function getSock() {
-    return sockInstance;
-}
-
-async function startBot(io) {
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState(SESSIONS_DIR);
-
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            patchMessageBeforeSending: (message) => {
-                const requiresPatch = !!(
-                    message.buttonsMessage ||
-                    message.templateMessage ||
-                    message.listMessage
-                );
-                if (requiresPatch) {
-                    message = { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } };
-                }
-                return message;
-            }
-        });
-
-        // exemplo: iniciar eventos
-        sock.ev.on("connection.update", (update) => {
-            console.log("Conexão atualizada:", update);
-        });
-
-    } catch (err) {
-        console.error("Erro ao iniciar o bot:", err);
-    }
-}
-
-
-        sockInstance = sock;
-
-        sock.ev.on('creds.update', saveCreds);
-
-const atendimentos = {};
-
 let sockInstance = null;
 
 function getSock() {
@@ -64,7 +20,10 @@ function getSock() {
 async function startBot(io) {
     try {
         const sessionFiles = fs.readdirSync(SESSIONS_DIR).filter(f => f.startsWith('session-') && f.endsWith('.json'));
-        const sessionFile = sessionFiles.length > 0 ? path.join(SESSIONS_DIR, sessionFiles[0]) : path.join(SESSIONS_DIR, `session-${Date.now()}.json`);
+        const sessionFile = sessionFiles.length > 0 
+            ? path.join(SESSIONS_DIR, sessionFiles[0]) 
+            : path.join(SESSIONS_DIR, `session-${Date.now()}.json`);
+        
         const { state, saveState } = useSingleFileAuthState(sessionFile);
 
         const sock = makeWASocket({
@@ -99,7 +58,7 @@ async function startBot(io) {
                 console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
                 
                 if (shouldReconnect) {
-                    setTimeout(() => startBot(io), 3000); // Aguarda 3s antes de reconectar
+                    setTimeout(() => startBot(io), 3000);
                 } else {
                     console.log('❌ Você foi deslogado.');
                     io.emit('disconnected');
@@ -110,7 +69,6 @@ async function startBot(io) {
             }
         });
 
-        // Handler principal de mensagens
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (type !== 'notify') return;
             
@@ -122,7 +80,6 @@ async function startBot(io) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             const comando = texto.toLowerCase().trim();
 
-            // --- SEGURANÇA ---
             const secCheck = securityMiddleware(jid, comando);
             if (!secCheck.allowed) {
                 await sock.sendMessage(jid, { text: secCheck.message });
@@ -131,7 +88,6 @@ async function startBot(io) {
 
             console.log(`📨 Mensagem recebida de ${jid}: ${comando}`);
 
-            // Inicializa estado do cliente se não existir
             if (!atendimentos[jid]) {
                 atendimentos[jid] = { 
                     ativo: true, 
@@ -139,30 +95,24 @@ async function startBot(io) {
                     aparelho: null,
                     ultimaInteracao: new Date()
                 };
-                // Primeira mensagem: envia menu direto, sem aviso de erro
                 return await enviarMenuPrincipal(sock, jid);
             }
 
-            // Atualiza última interação
             atendimentos[jid].ultimaInteracao = new Date();
 
-            // Comando especial para reativar o bot
             if (!atendimentos[jid].ativo && comando === 'menu') {
                 atendimentos[jid].ativo = true;
                 atendimentos[jid].fase = 'menu_principal';
                 return await enviarMenuPrincipal(sock, jid);
             }
 
-            // Se o bot está desativado para este usuário, não responde
             if (!atendimentos[jid].ativo) return;
 
-            // Comando especial para voltar ao menu principal
             if (comando === 'menu') {
                 atendimentos[jid].fase = 'menu_principal';
                 return await enviarMenuPrincipal(sock, jid);
             }
 
-            // Executa o handler apropriado baseado na fase atual
             const fase = atendimentos[jid].fase;
             if (handlers[fase]) {
                 try {
@@ -181,13 +131,10 @@ async function startBot(io) {
 
     } catch (error) {
         console.error('❌ Erro ao iniciar bot:', error);
-        setTimeout(() => startBot(io), 5000); // Tenta novamente em 5s
+        setTimeout(() => startBot(io), 5000);
     }
 }
 
-/**
- * Função para limpar sessões antigas (opcional)
- */
 function limparSessoesAntigas() {
     const LIMITE_DIAS = 15;
     const agora = new Date();
@@ -203,7 +150,6 @@ function limparSessoesAntigas() {
     });
 }
 
-// Exporta funções
 module.exports = {
     startBot,
     getSock,
