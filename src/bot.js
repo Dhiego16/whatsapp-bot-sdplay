@@ -1,51 +1,54 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const {
-    enviarMenuPrincipal,
-    handleMenuPrincipal,
-    handleSubmenuAparelho,
-    handleSubmenuSmartTV,
-    handleSubmenuCelular,
-    handleSubmenuTeste
-} = require('./menus');
+const { default: makeWASocket, DisconnectReason, useSingleFileAuthState } = require('@adiwajshing/baileys');
+const { Boom } = require('@hapi/boom');
+const path = require('path');
+const fs = require('fs');
+const securityMiddleware = require('./security');
+const handlers = require('./menus');
+const { enviarMenuPrincipal } = require('./menus');
 
-const AUTH_DIR = './auth_test';
-let sock;
+const SESSIONS_DIR = path.join(__dirname, '../auth_test');
+if (!fs.existsSync(SESSIONS_DIR)) {
+    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+}
+
 const atendimentos = {};
 
-// Mapeamento de handlers por fase
-const handlers = {
-    menu_principal: handleMenuPrincipal,
-    submenu_aparelho: handleSubmenuAparelho,
-    submenu_smarttv: handleSubmenuSmartTV,
-    submenu_celular: handleSubmenuCelular,
-    submenu_teste: handleSubmenuTeste
-};
+let sockInstance = null;
 
-/**
- * Inicializa o bot do WhatsApp
- */
+function getSock() {
+    return sockInstance;
+}
+
 async function startBot(io) {
     try {
-        console.log('🚀 Iniciando bot...');
-        
-        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-        const { version } = await fetchLatestBaileysVersion();
+        const sessionFiles = fs.readdirSync(SESSIONS_DIR).filter(f => f.startsWith('session-') && f.endsWith('.json'));
+        const sessionFile = sessionFiles.length > 0 ? path.join(SESSIONS_DIR, sessionFiles[0]) : path.join(SESSIONS_DIR, `session-${Date.now()}.json`);
+        const { state, saveState } = useSingleFileAuthState(sessionFile);
 
-        sock = makeWASocket({
-            version,
+        const sock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
-            logger:pino ({ level: 'silent' }) // Remove logs desnecessários
+            patchMessageBeforeSending: (message) => {
+                const requiresPatch = !!(
+                    message.buttonsMessage ||
+                    message.templateMessage ||
+                    message.listMessage
+                );
+                if (requiresPatch) {
+                    message = { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } };
+                }
+                return message;
+            }
         });
 
-        sock.ev.on('creds.update', saveCreds);
+        sockInstance = sock;
 
-        sock.ev.on('connection.update', (update) => {
+        sock.ev.on('creds.update', saveState);
+
+        sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                console.log('📱 QR Code gerado. Abra o navegador para escanear.');
                 io.emit('qr', qr);
             }
 
@@ -77,20 +80,26 @@ async function startBot(io) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             const comando = texto.toLowerCase().trim();
 
+            // --- SEGURANÇA ---
+            const secCheck = securityMiddleware(jid, comando);
+            if (!secCheck.allowed) {
+                await sock.sendMessage(jid, { text: secCheck.message });
+                return;
+            }
+
             console.log(`📨 Mensagem recebida de ${jid}: ${comando}`);
 
             // Inicializa estado do cliente se não existir
             if (!atendimentos[jid]) {
-               atendimentos[jid] = { 
-               ativo: true, 
-               fase: 'menu_principal',
-               aparelho: null,
-               ultimaInteracao: new Date()
-           };
-           // Primeira mensagem: envia menu direto, sem aviso de erro
-           return await enviarMenuPrincipal(sock, jid);
-       }
-
+                atendimentos[jid] = { 
+                    ativo: true, 
+                    fase: 'menu_principal',
+                    aparelho: null,
+                    ultimaInteracao: new Date()
+                };
+                // Primeira mensagem: envia menu direto, sem aviso de erro
+                return await enviarMenuPrincipal(sock, jid);
+            }
 
             // Atualiza última interação
             atendimentos[jid].ultimaInteracao = new Date();
@@ -138,23 +147,24 @@ async function startBot(io) {
  * Função para limpar sessões antigas (opcional)
  */
 function limparSessoesAntigas() {
+    const LIMITE_DIAS = 15;
     const agora = new Date();
-    const tempoLimite = 30 * 60 * 1000; // 30 minutos
-
-    Object.keys(atendimentos).forEach(jid => {
-        const ultimaInteracao = atendimentos[jid].ultimaInteracao;
-        if (agora - ultimaInteracao > tempoLimite) {
-            delete atendimentos[jid];
-            console.log(`🧹 Sessão limpa para ${jid}`);
+    const arquivos = fs.readdirSync(SESSIONS_DIR).filter(f => f.startsWith('session-') && f.endsWith('.json'));
+    arquivos.forEach(arquivo => {
+        const caminho = path.join(SESSIONS_DIR, arquivo);
+        const stats = fs.statSync(caminho);
+        const diffDias = Math.floor((agora - stats.mtime) / (1000 * 60 * 60 * 24));
+        if (diffDias > LIMITE_DIAS) {
+            fs.unlinkSync(caminho);
+            console.log(`🧹 Sessão antiga removida: ${arquivo}`);
         }
     });
 }
 
-// Limpa sessões antigas a cada 10 minutos
-setInterval(limparSessoesAntigas, 10 * 60 * 1000);
-
-module.exports = { 
-    startBot, 
-    getSock: () => sock,
-    getAtendimentos: () => atendimentos
+// Exporta funções
+module.exports = {
+    startBot,
+    getSock,
+    limparSessoesAntigas,
+    atendimentos,
 };
