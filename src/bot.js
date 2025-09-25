@@ -1,21 +1,19 @@
 // bot.js
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const path = require('path');
-const fs = require('fs');
-const pino = require('pino'); // logs limpos
+const pino = require('pino');
+const { enviarMenuPrincipal } = require('./menus');
 const security = require('./security');
 const handlers = require('./handlers');
-const { enviarMenuPrincipal } = require('./menus');
 
-// Guarda o estado dos atendimentos
+let sock = null; // guarda a instância do socket
+
 const atendimentos = {};
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
-    const sock = makeWASocket({
+    sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
         auth: state
     });
 
@@ -43,13 +41,11 @@ async function startBot() {
 
             console.log(`📨 Mensagem recebida de ${jid}: ${msgContent}`);
 
-            // Security: verifica greenlist
             if (!security.isGreenlisted(jid)) {
                 console.log(`❌ [SECURITY] Usuário ${jid} não está na greenlist.`);
                 continue;
             }
 
-            // Inicializa atendimento se não existir
             if (!atendimentos[jid]) {
                 atendimentos[jid] = {
                     ativo: true,
@@ -62,26 +58,24 @@ async function startBot() {
 
             const comando = msgContent.trim();
 
-            // Checa fase do usuário e chama handler correto
             try {
                 switch (atendimentos[jid].fase) {
                     case 'menu_principal':
-                        await handlers.menu_principal(sock, jid, comando, atendimentos);
+                        await handlers.handleMenuPrincipal(sock, jid, comando, atendimentos);
                         break;
                     case 'submenu_aparelho':
-                        await handlers.submenu_aparelho(sock, jid, comando, atendimentos);
+                        await handlers.handleSubmenuAparelho(sock, jid, comando, atendimentos);
                         break;
                     case 'submenu_smarttv':
-                        await handlers.submenu_smarttv(sock, jid, comando, atendimentos);
+                        await handlers.handleSubmenuSmartTV(sock, jid, comando, atendimentos);
                         break;
                     case 'submenu_celular':
-                        await handlers.submenu_celular(sock, jid, comando, atendimentos);
+                        await handlers.handleSubmenuCelular(sock, jid, comando, atendimentos);
                         break;
                     case 'submenu_teste':
-                        await handlers.submenu_teste(sock, jid, comando, atendimentos);
+                        await handlers.handleSubmenuTeste(sock, jid, comando, atendimentos);
                         break;
                     default:
-                        // Se fase inválida, volta ao menu principal
                         atendimentos[jid].fase = 'menu_principal';
                         await enviarMenuPrincipal(sock, jid);
                         break;
@@ -94,4 +88,9 @@ async function startBot() {
     });
 }
 
-startBot();
+// Função para pegar o socket
+function getSock() {
+    return sock;
+}
+
+module.exports = { startBot, getSock };
