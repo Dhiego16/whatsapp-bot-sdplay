@@ -77,9 +77,9 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             // Checa limite de 30 dias
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
-                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas 20$/Mês 🔥\n💡 Digite "Menu" para voltar ao início.`
-                })
-                
+                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas 20$/Mês 🔥`
+                });
+                // mantém fase ativa
                 return;
             }
 
