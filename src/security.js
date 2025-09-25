@@ -1,14 +1,15 @@
-// Middleware de segurança: limita spam, bloqueia flood e valida comandos
+// Middleware de segurança aprimorado
 const userCommandTimestamps = {};
 const blockedUsers = {};
+const blockedHistory = {};
 
-const COMMAND_LIMIT_PER_MIN = 5; // número máximo de comandos por minuto
-const BLOCK_TIME_MS = 5 * 60 * 1000; // 5 minutos de bloqueio
+const COMMAND_LIMIT_PER_MIN = 5;       // Máx comandos por minuto
+const BLOCK_TIME_MS = 5 * 60 * 1000;  // 5 minutos de bloqueio
 
-function securityMiddleware(jid, comando) {
+function securityMiddleware(jid, comando, faseAtual = 'menu_principal') {
     const now = Date.now();
 
-    // Se o usuário está bloqueado, impede execução
+    // Bloqueio ativo?
     if (blockedUsers[jid] && blockedUsers[jid] > now) {
         return {
             allowed: false,
@@ -16,15 +17,38 @@ function securityMiddleware(jid, comando) {
         };
     }
 
-    // Registra timestamp dos comandos do usuário
+    // Inicializa histórico
     userCommandTimestamps[jid] = userCommandTimestamps[jid] || [];
-    // Remove timestamps antigos (+ de 1 min)
-    userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts < 60 * 1000);
-    userCommandTimestamps[jid].push(now);
 
-    // Verifica se ultrapassou o limite
-    if (userCommandTimestamps[jid].length > COMMAND_LIMIT_PER_MIN) {
+    // Remove timestamps antigos (+1 min)
+    userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts.time < 60 * 1000);
+
+    // Bloqueio por comando repetido
+    if (userCommandTimestamps[jid].slice(-3).every(c => c.comando === comando)) {
+        return {
+            allowed: false,
+            message: '⚠️ Você está repetindo o mesmo comando. Espere um pouco.'
+        };
+    }
+
+    // Adiciona o comando atual
+    userCommandTimestamps[jid].push({ comando, time: now, fase: faseAtual });
+
+    // Limites por fase
+    const limits = {
+        menu_principal: 5,
+        submenu_teste: 3,
+        submenu_aparelho: 4
+    };
+    const limit = limits[faseAtual] || COMMAND_LIMIT_PER_MIN;
+
+    if (userCommandTimestamps[jid].length > limit) {
         blockedUsers[jid] = now + BLOCK_TIME_MS;
+
+        // Histórico de bloqueios
+        blockedHistory[jid] = blockedHistory[jid] || [];
+        blockedHistory[jid].push({ time: now, fase: faseAtual, comando });
+
         userCommandTimestamps[jid] = [];
         return {
             allowed: false,
@@ -32,7 +56,7 @@ function securityMiddleware(jid, comando) {
         };
     }
 
-    // Validação simples do comando (todos devem começar com letra ou número)
+    // Validação simples do comando
     if (!comando || !/^[a-zA-Z0-9]/.test(comando)) {
         return {
             allowed: false,
@@ -42,5 +66,13 @@ function securityMiddleware(jid, comando) {
 
     return { allowed: true };
 }
+
+// Limpeza automática de timestamps antigos
+setInterval(() => {
+    const now = Date.now();
+    Object.keys(userCommandTimestamps).forEach(jid => {
+        userCommandTimestamps[jid] = userCommandTimestamps[jid].filter(ts => now - ts.time < 60 * 1000);
+    });
+}, 30000);
 
 module.exports = securityMiddleware;
