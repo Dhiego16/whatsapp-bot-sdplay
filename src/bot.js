@@ -37,8 +37,17 @@ async function startBot(io) {
                 return message;
             }
         });
+
+        // exemplo: iniciar eventos
+        sock.ev.on("connection.update", (update) => {
+            console.log("Conexão atualizada:", update);
+        });
+
+    } catch (err) {
+        console.error("Erro ao iniciar o bot:", err);
     }
-} 
+}
+
 
         sockInstance = sock;
 
