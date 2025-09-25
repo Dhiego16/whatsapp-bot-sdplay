@@ -78,9 +78,9 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
                     text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas 20$/Mês 🔥\n💡 Digite "Menu" para voltar ao início.`
-                });
-                // desativa bot
-                atendimentos[jid].ativo = false;
+                })
+                
+                return;
             }
 
            // Continua pro submenu de aparelhos
