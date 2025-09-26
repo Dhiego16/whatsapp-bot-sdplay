@@ -1,7 +1,14 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+
+// importa as classes
+const FollowUpSystem = require('./followup');
+const AdminSystem = require('./admin');
+
+// cria as instâncias
 const followUpSystem = new FollowUpSystem();
 const adminSystem = new AdminSystem(followUpSystem);
+
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
