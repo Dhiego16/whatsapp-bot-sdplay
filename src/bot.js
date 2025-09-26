@@ -54,7 +54,7 @@ async function startBot(io) {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnected?.error?.output?.statusCode !== 401;
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
                 console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
                 
                 if (shouldReconnect) {
