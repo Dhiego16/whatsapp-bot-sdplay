@@ -12,8 +12,10 @@ class MarketingAutomatico {
         this.initMensagens();
     }
 
+    // Mensagens variadas para não parecer spam
     initMensagens() {
         this.mensagensMarketing = [
+            // Mensagem 1 - Manhã (focada em qualidade)
             {
                 horario: '09:00',
                 texto: `🔥 **SD PLAY - IPTV Premium** 🔥
@@ -33,6 +35,8 @@ https://wa.me/message/PFDNAVBLMYODJ1
 
 _Qualidade premium, preço justo_ ✨`
             },
+
+            // Mensagem 2 - Tarde (focada em economia)
             {
                 horario: '15:30',
                 texto: `💸 **CHEGA DE PAGAR CARO EM TV!** 💸
@@ -53,6 +57,8 @@ https://wa.me/message/PFDNAVBLMYODJ1
 
 _Economia de verdade_ 💰`
             },
+
+            // Mensagem 3 - Noite (focada em entretenimento)
             {
                 horario: '20:45',
                 texto: `🌙 **BOA NOITE, GALERA!** 
@@ -76,6 +82,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         ];
     }
 
+    // Adiciona grupo à lista de divulgação
     adicionarGrupo(jid, nome = '') {
         const grupoExiste = this.grupos.find(g => g.jid === jid);
         if (!grupoExiste) {
@@ -92,6 +99,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         return false;
     }
 
+    // Remove grupo da lista
     removerGrupo(jid) {
         const index = this.grupos.findIndex(g => g.jid === jid);
         if (index !== -1) {
@@ -103,6 +111,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         return false;
     }
 
+    // Lista grupos cadastrados
     listarGrupos() {
         if (this.grupos.length === 0) {
             return '📝 Nenhum grupo cadastrado ainda.';
@@ -118,6 +127,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         return lista;
     }
 
+    // Ativar/desativar grupo
     toggleGrupo(jid) {
         const grupo = this.grupos.find(g => g.jid === jid);
         if (grupo) {
@@ -128,6 +138,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         return null;
     }
 
+    // Envia mensagem para todos os grupos ativos
     async enviarParaTodos() {
         if (!this.sock || this.grupos.length === 0) return;
 
@@ -139,8 +150,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         for (const grupo of gruposAtivos) {
             try {
                 await this.sock.sendMessage(grupo.jid, { 
-                    image: { url: './ads.jpeg' }, // imagem adicionada
-                    caption: mensagem.texto
+                    text: mensagem.texto 
                 });
                 
                 grupo.ultimaMsg = new Date();
@@ -148,12 +158,14 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
                 
                 console.log(`✅ Enviado para: ${grupo.nome}`);
                 
+                // Aguarda 5-10s entre grupos para não ser bloqueado
                 const delay = Math.random() * 5000 + 5000; // 5-10s
                 await new Promise(resolve => setTimeout(resolve, delay));
                 
             } catch (error) {
                 console.error(`❌ Erro ao enviar para ${grupo.nome}:`, error);
                 
+                // Se erro de permissão, desativa o grupo
                 if (error.output?.statusCode === 403) {
                     grupo.ativo = false;
                     console.log(`🚫 Grupo ${grupo.nome} desativado (sem permissão)`);
@@ -161,19 +173,18 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
             }
         }
 
+        // Próxima mensagem na sequência
         this.indiceAtual = (this.indiceAtual + 1) % this.mensagensMarketing.length;
     }
 
+    // Envia para um grupo específico (teste)
     async enviarParaGrupo(jid) {
         const grupo = this.grupos.find(g => g.jid === jid);
         if (!grupo || !grupo.ativo) return false;
 
         try {
-            const mensagem = this.mensagensMarketing[0]; 
-            await this.sock.sendMessage(jid, { 
-                image: { url: './ads.jpeg' }, // imagem adicionada
-                caption: mensagem.texto
-            });
+            const mensagem = this.mensagensMarketing[0]; // Sempre primeira mensagem para teste
+            await this.sock.sendMessage(jid, { text: mensagem.texto });
             
             grupo.ultimaMsg = new Date();
             grupo.totalEnviadas++;
@@ -186,11 +197,13 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         }
     }
 
+    // Inicia o sistema automático
     iniciar() {
         if (this.inicializado) return;
 
         console.log('🚀 Iniciando marketing automático...');
         
+        // Agenda para 3 horários do dia
         this.mensagensMarketing.forEach(msg => {
             cron.schedule(`0 ${msg.horario.split(':')[1]} ${msg.horario.split(':')[0]} * * *`, () => {
                 this.enviarParaTodos();
@@ -203,11 +216,14 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         console.log('✅ Marketing automático configurado para 09:00, 15:30 e 20:45');
     }
 
+    // Para o sistema
     parar() {
+        // Note: node-cron não tem método stop fácil, precisaria armazenar as tasks
         this.inicializado = false;
         console.log('🛑 Marketing automático pausado');
     }
 
+    // Estatísticas
     getEstatisticas() {
         const total = this.grupos.length;
         const ativos = this.grupos.filter(g => g.ativo).length;
