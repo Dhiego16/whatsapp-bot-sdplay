@@ -271,15 +271,15 @@ _Responde aí, vamos conversar!_ 😊`;
 
         let lista = `⏰ **TESTES ATIVOS** (${this.testsAtivos.size}):\n\n`;
         
-        this.testsAtivos.forEach(teste => {
-            const tempoRestante = Math.ceil((teste.expiraEm - new Date()) / (1000 * 60)); // minutos
-            const status = teste.finalizado ? '🏁' : teste.avisoEnviado ? '⚠️' : '🟢';
-            const duracao = teste.duracaoHoras === 6 ? '6h' : '4h';
-            
-            lista += `${status} ${jid.split('@')[0]}\n`;
-            lista += `   ⏱️ ${tempoRestante > 0 ? `${tempoRestante}min restantes` : 'Expirado'}\n`;
-            lista += `   📱 ${teste.aparelho} (${duracao}) | ${teste.tipo}\n\n`;
-        });
+        this.testsAtivos.forEach((teste, jid) => {
+    const tempoRestante = Math.ceil((teste.expiraEm - new Date()) / (1000 * 60)); // minutos
+    const status = teste.finalizado ? '🏁' : teste.avisoEnviado ? '⚠️' : '🟢';
+    const duracao = teste.duracaoHoras === 6 ? '6h' : '4h';
+    
+    lista += `${status} ${jid.split('@')[0]}\n`;
+    lista += `   ⏱️ ${tempoRestante > 0 ? `${tempoRestante}min restantes` : 'Expirado'}\n`;
+    lista += `   📱 ${teste.aparelho} (${duracao}) | ${teste.tipo}\n\n`;
+});
 
         return lista;
     }
