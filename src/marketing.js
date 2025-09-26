@@ -139,7 +139,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         for (const grupo of gruposAtivos) {
             try {
                 await this.sock.sendMessage(grupo.jid, { 
-                    image: { url: '.ads.jpeg' }, // imagem adicionada
+                    image: { url: './ads.jpeg' }, // imagem adicionada
                     caption: mensagem.texto
                 });
                 
@@ -171,7 +171,7 @@ _Entretenimento completo para toda família_ 👨‍👩‍👧‍👦`
         try {
             const mensagem = this.mensagensMarketing[0]; 
             await this.sock.sendMessage(jid, { 
-                image: { url: '.ads.jpeg' }, // imagem adicionada
+                image: { url: './ads.jpeg' }, // imagem adicionada
                 caption: mensagem.texto
             });
             
