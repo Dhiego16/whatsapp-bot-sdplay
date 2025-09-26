@@ -1,5 +1,6 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const AdminSystem = require('./admin'); // NOVA LINHA
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
@@ -12,6 +13,7 @@ const {
 const AUTH_DIR = './auth_test';
 let sock;
 const atendimentos = {};
+const adminSystem = new AdminSystem(); // NOVA LINHA
 
 // Mapeamento de handlers por fase
 const handlers = {
@@ -36,7 +38,7 @@ async function startBot(io) {
             version,
             auth: state,
             printQRInTerminal: false,
-            logger:pino ({ level: 'silent' }) // Remove logs desnecessários
+            logger: pino({ level: 'silent' })
         });
 
         sock.ev.on('creds.update', saveCreds);
@@ -54,13 +56,17 @@ async function startBot(io) {
                 console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
                 
                 if (shouldReconnect) {
-                    setTimeout(() => startBot(io), 3000); // Aguarda 3s antes de reconectar
+                    setTimeout(() => startBot(io), 3000);
                 } else {
                     console.log('❌ Você foi deslogado.');
                     io.emit('disconnected');
                 }
             } else if (connection === 'open') {
                 console.log('✅ Bot conectado com sucesso!');
+                
+                // NOVA LINHA: Inicializar sistema de marketing
+                adminSystem.init(sock);
+                
                 io.emit('connected');
             }
         });
@@ -73,24 +79,30 @@ async function startBot(io) {
             if (!msg.message || msg.key.fromMe) return;
 
             const jid = msg.key.remoteJid;
-            if (jid.endsWith('@g.us')) return;
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             const comando = texto.toLowerCase().trim();
+
+            // NOVA FUNCIONALIDADE: Verificar comandos administrativos primeiro
+            if (texto.startsWith('/')) {
+                const isAdminCommand = await adminSystem.processarComando(sock, jid, texto);
+                if (isAdminCommand) return; // Se foi comando admin, para aqui
+            }
+
+            // Se é grupo, não processa (só comandos admin em grupos)
+            if (jid.endsWith('@g.us')) return;
 
             console.log(`📨 Mensagem recebida de ${jid}: ${comando}`);
 
             // Inicializa estado do cliente se não existir
             if (!atendimentos[jid]) {
-               atendimentos[jid] = { 
-               ativo: true, 
-               fase: 'menu_principal',
-               aparelho: null,
-               ultimaInteracao: new Date()
-           };
-           // Primeira mensagem: envia menu direto, sem aviso de erro
-           return await enviarMenuPrincipal(sock, jid);
-       }
-
+                atendimentos[jid] = { 
+                    ativo: true, 
+                    fase: 'menu_principal',
+                    aparelho: null,
+                    ultimaInteracao: new Date()
+                };
+                return await enviarMenuPrincipal(sock, jid);
+            }
 
             // Atualiza última interação
             atendimentos[jid].ultimaInteracao = new Date();
@@ -130,12 +142,12 @@ async function startBot(io) {
 
     } catch (error) {
         console.error('❌ Erro ao iniciar bot:', error);
-        setTimeout(() => startBot(io), 5000); // Tenta novamente em 5s
+        setTimeout(() => startBot(io), 5000);
     }
 }
 
 /**
- * Função para limpar sessões antigas (opcional)
+ * Função para limpar sessões antigas
  */
 function limparSessoesAntigas() {
     const agora = new Date();
@@ -156,5 +168,6 @@ setInterval(limparSessoesAntigas, 10 * 60 * 1000);
 module.exports = { 
     startBot, 
     getSock: () => sock,
-    getAtendimentos: () => atendimentos
+    getAtendimentos: () => atendimentos,
+    getAdminSystem: () => adminSystem // NOVA LINHA
 };
