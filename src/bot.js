@@ -1,6 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const AdminSystem = require('./admin'); // NOVA LINHA
+const AdminSystem = require('./admin');
+const FollowUpSystem = require('./followup'); // NOVA LINHA
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
@@ -13,7 +14,8 @@ const {
 const AUTH_DIR = './auth_test';
 let sock;
 const atendimentos = {};
-const adminSystem = new AdminSystem(); // NOVA LINHA
+const adminSystem = new AdminSystem();
+const followUpSystem = new FollowUpSystem(); // NOVA LINHA
 
 // Mapeamento de handlers por fase
 const handlers = {
@@ -52,7 +54,7 @@ async function startBot(io) {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
+                const shouldReconnect = lastDisconnected?.error?.output?.statusCode !== 401;
                 console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
                 
                 if (shouldReconnect) {
@@ -64,8 +66,9 @@ async function startBot(io) {
             } else if (connection === 'open') {
                 console.log('✅ Bot conectado com sucesso!');
                 
-                // NOVA LINHA: Inicializar sistema de marketing
+                // Inicializar sistemas
                 adminSystem.init(sock);
+                followUpSystem.init(sock); // NOVA LINHA
                 
                 io.emit('connected');
             }
@@ -169,5 +172,6 @@ module.exports = {
     startBot, 
     getSock: () => sock,
     getAtendimentos: () => atendimentos,
-    getAdminSystem: () => adminSystem // NOVA LINHA
+    getAdminSystem: () => adminSystem,
+    getFollowUpSystem: () => followUpSystem // NOVA LINHA
 };
