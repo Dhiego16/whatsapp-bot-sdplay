@@ -4,7 +4,7 @@ const MarketingAutomatico = require('./marketing');
 class AdminSystem {
     constructor() {
         this.adminNumbers = [
-            '5511999999999@s.whatsapp.net', // ⚠️ SUBSTITUA pelo seu número
+            '556298577568@s.whatsapp.net', // ⚠️ SUBSTITUA pelo seu número
             // Adicione outros números admin se precisar
         ];
         this.marketing = null;
