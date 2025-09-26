@@ -166,49 +166,41 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const aparelho = atendimentos[jid].aparelho;
     const apiURL = aparelho === 'SMARTTV' ? API.SMARTTV[tipo] : API.ANDROID_TVBOX[tipo];
 
+    // 🔥 Declara antes do loop
+    let aparelhoCorreto = aparelho;
+
     // Mostra mensagem de carregamento
-    await sock.sendMessage(jid, { 
-        text: '⏳ Gerando seu teste... Aguarde alguns segundos...' 
-    });
+    await sock.sendMessage(jid, { text: '⏳ Gerando seu teste... Aguarde alguns segundos...' });
 
     let tentativa = 0;
     let sucesso = false;
 
     while(tentativa < 3 && !sucesso){
         try {
-            console.log(`📡 Tentativa ${tentativa + 1} - Requisição API: ${aparelho} - ${tipo}`);
-            const response = await axios.post(apiURL, {}, { timeout: 15000 });
-            
-            // Envia o teste
-            await sock.sendMessage(jid, { text: response.data });
+            // ... requisição API ...
 
-            // ✅ REGISTRA TESTE NO SISTEMA DE FOLLOW-UP
-            const { getFollowUpSystem } = require('./bot');
-            const followUpSystem = getFollowUpSystem();
-            if (followUpSystem) {
-                // ✅ CORREÇÃO: Mapear aparelho corretamente
-                let aparelhoCorreto = aparelho;
-                if (aparelho === 'TVBOX') aparelhoCorreto = 'ANDROID'; // TV Box usa API Android
-                if (aparelho === 'ANDROID') aparelhoCorreto = 'ANDROID'; // Android
-                if (aparelho === 'IOS') aparelhoCorreto = 'IOS'; // iOS  
-                if (aparelho === 'SMARTTV') aparelhoCorreto = 'SMARTTV'; // Smart TV
-                
-                followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
-            }
+            // Corrige o mapeamento
+            if (aparelho === 'TVBOX') aparelhoCorreto = 'ANDROID';
+            if (aparelho === 'ANDROID') aparelhoCorreto = 'ANDROID';
+            if (aparelho === 'IOS') aparelhoCorreto = 'IOS';
+            if (aparelho === 'SMARTTV') aparelhoCorreto = 'SMARTTV';
 
-            // Volta ao menu principal após enviar teste
+            followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+
+            // Volta ao menu
             atendimentos[jid].ultimoTeste = new Date();
             atendimentos[jid].fase = 'menu_principal';
             atendimentos[jid].aparelho = null;
             sucesso = true;
-            
-            // Envia mensagem de follow-up
+
+            // ✅ Agora a variável está disponível aqui também
             setTimeout(async () => {
                 const duracao = (aparelhoCorreto === 'SMARTTV' || aparelhoCorreto === 'IOS') ? '6 horas' : '4 horas';
                 await sock.sendMessage(jid, { 
-                    text: `🎉 **Teste enviado com sucesso!**\n\n💡 Aproveite as ${duracao} de acesso completo!\n📺 Teste todos os canais e qualidade\n\n⏰ **Importante:** Você receberá um aviso antes do teste expirar\n\n📱 Digite "Menu" se precisar de algo!` 
+                    text: `🎉 **Teste enviado com sucesso!**\n\n💡 Aproveite as ${duracao} de acesso completo!\n📺 Teste todos os canais e qualidade`
                 });
-            }, 3000);
+            }, 2000);
+
             
             console.log(`✅ Teste enviado e registrado para ${jid}`);
             
