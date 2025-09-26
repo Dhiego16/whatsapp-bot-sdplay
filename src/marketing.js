@@ -6,8 +6,8 @@ class MarketingAutomatico {
         this.sock = sock;
         this.grupos = []; // Lista de grupos para divulgar
         this.mensagensMarketing = [];
-        this.indiceAtual = 0;
-        this.inicializado = false;
+        this.indiceAtual = 1;
+        this.inicializado = true;
         
         this.initMensagens();
     }
