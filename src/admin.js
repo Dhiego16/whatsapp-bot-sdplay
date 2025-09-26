@@ -4,7 +4,7 @@ const MarketingAutomatico = require('./marketing');
 class AdminSystem {
     constructor() {
         this.adminNumbers = [
-            '556298577568@s.whatsapp.net', // Substitua pelo seu número
+            '556298577568@s.whatsapp.net', // ⚠️ SUBSTITUA pelo seu número
             // Adicione outros números admin se precisar
         ];
         this.marketing = null;
@@ -61,6 +61,12 @@ class AdminSystem {
                 case '/auto':
                     return await this.autoAddGrupos(sock, jid);
                 
+                case '/tests':
+                    return await this.listarTestesAtivos(sock, jid);
+                
+                case '/finish':
+                    return await this.finalizarTeste(sock, jid, args);
+                
                 default:
                     return false;
             }
@@ -115,10 +121,102 @@ class AdminSystem {
         return true;
     }
 
-    // Listar grupos
+    // Listar grupos cadastrados para marketing
     async listarGrupos(sock, jid) {
         const lista = this.marketing.listarGrupos();
         await sock.sendMessage(jid, { text: lista });
+        return true;
+    }
+
+    // Listar todos os grupos que o bot tem acesso
+    async listarTodosGrupos(sock, jid) {
+        await sock.sendMessage(jid, { 
+            text: '🔍 Buscando todos os grupos... Aguarde.' 
+        });
+        
+        const grupos = await this.descobrirGrupos(sock);
+        
+        if (grupos.length === 0) {
+            await sock.sendMessage(jid, { 
+                text: '❌ Nenhum grupo encontrado. O bot precisa estar em grupos primeiro.' 
+            });
+            return true;
+        }
+        
+        let texto = `📋 **TODOS OS GRUPOS DISPONÍVEIS** (${grupos.length})\n\n`;
+        
+        for (let i = 0; i < grupos.length; i++) {
+            const grupo = grupos[i];
+            texto += `${i + 1}. **${grupo.nome}**\n`;
+            texto += `   🆔 \`${grupo.id}\`\n`;
+            texto += `   👥 ${grupo.participantes} membros\n\n`;
+            
+            // Divide em mensagens menores para não dar erro (a cada 8 grupos)
+            if ((i + 1) % 8 === 0 || i === grupos.length - 1) {
+                await sock.sendMessage(jid, { text: texto });
+                texto = '';
+                
+                // Aguarda um pouco entre mensagens
+                if (i < grupos.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    texto = `📋 **CONTINUAÇÃO** (${i + 2}-${Math.min(i + 9, grupos.length)}):\n\n`;
+                }
+            }
+        }
+        
+        await sock.sendMessage(jid, { 
+            text: '💡 **Para adicionar:** `/add [ID] [NOME]`\n💡 **Adicionar todos:** `/auto`' 
+        });
+        
+        return true;
+    }
+
+    // Listar testes ativos
+    async listarTestesAtivos(sock, jid) {
+        const { getFollowUpSystem } = require('./bot');
+        const followUpSystem = getFollowUpSystem();
+        
+        if (!followUpSystem) {
+            await sock.sendMessage(jid, { 
+                text: '❌ Sistema de follow-up não inicializado.' 
+            });
+            return true;
+        }
+
+        const lista = followUpSystem.listarTestesAtivos();
+        const stats = followUpSystem.getEstatisticas();
+        
+        const texto = `${lista}\n📊 **RESUMO:**\n• Total: ${stats.totalTestes}\n• Ativos: ${stats.testesAtivos}\n• Avisos enviados: ${stats.avisosEnviados}`;
+        
+        await sock.sendMessage(jid, { text: texto });
+        return true;
+    }
+
+    // Finalizar teste manualmente
+    async finalizarTeste(sock, jid, args) {
+        if (args.length < 2) {
+            await sock.sendMessage(jid, { 
+                text: '❌ Uso: /finish [NÚMERO] - Ex: /finish 5511999999999' 
+            });
+            return true;
+        }
+
+        const numeroCliente = args[1] + '@s.whatsapp.net';
+        const { getFollowUpSystem } = require('./bot');
+        const followUpSystem = getFollowUpSystem();
+        
+        if (!followUpSystem) {
+            await sock.sendMessage(jid, { 
+                text: '❌ Sistema de follow-up não inicializado.' 
+            });
+            return true;
+        }
+
+        followUpSystem.finalizarTeste(numeroCliente, 'admin_manual');
+        
+        await sock.sendMessage(jid, { 
+            text: `✅ Teste finalizado para ${args[1]}` 
+        });
         return true;
     }
 
@@ -206,8 +304,12 @@ class AdminSystem {
 📋 **Gerenciar Grupos:**
 • \`/add [ID] [NOME]\` - Adicionar grupo
 • \`/remove [ID]\` - Remover grupo  
-• \`/list\` - Listar todos os grupos
+• \`/list\` - Listar grupos do marketing
 • \`/toggle [ID]\` - Ativar/desativar grupo
+
+🔍 **Descobrir Grupos:**
+• \`/groups\` - Ver TODOS os grupos disponíveis
+• \`/auto\` - Adicionar todos os grupos automaticamente
 
 📊 **Monitoramento:**
 • \`/stats\` - Ver estatísticas
@@ -215,8 +317,6 @@ class AdminSystem {
 
 📤 **Envios:**
 • \`/send\` - Enviar marketing agora
-• \`/groups\` - Ver TODOS os grupos disponíveis
-• \`/auto\` - Adicionar todos os grupos automaticamente
 • \`/help\` - Mostrar esta ajuda
 
 ⚙️ **Sistema automático:** 3x/dia
@@ -247,45 +347,13 @@ class AdminSystem {
         }
     }
 
-    // Listar todos os grupos que o bot tem acesso
-    async listarTodosGrupos(sock, jid) {
-        await sock.sendMessage(jid, { 
-            text: '🔍 Buscando todos os grupos... Aguarde.' 
-        });
-        
-        const grupos = await this.descobrirGrupos(sock);
-        
-        if (grupos.length === 0) {
-            await sock.sendMessage(jid, { 
-                text: '❌ Nenhum grupo encontrado. O bot precisa estar em grupos primeiro.' 
-            });
-            return true;
-        }
-        
-        let texto = `📋 **TODOS OS GRUPOS DISPONÍVEIS** (${grupos.length})\n\n`;
-        
-        grupos.forEach((grupo, index) => {
-            texto += `${index + 1}. **${grupo.nome}**\n`;
-            texto += `   🆔 \`${grupo.id}\`\n`;
-            texto += `   👥 ${grupo.participantes} membros\n\n`;
-            
-            // Divide em mensagens menores para não dar erro
-            if ((index + 1) % 10 === 0 || index === grupos.length - 1) {
-                sock.sendMessage(jid, { text: texto });
-                texto = '';
-            }
-        });
-        
-        await sock.sendMessage(jid, { 
-            text: '💡 **Para adicionar:** `/add [ID] [NOME]`\n💡 **Adicionar todos:** `/auto`' 
-        });
-        
-        return true;
-    }
-
     // Auto-adicionar grupos (comando especial)
     async autoAddGrupos(sock, jid) {
         if (!this.isAdmin(jid)) return false;
+        
+        await sock.sendMessage(jid, { 
+            text: '🔄 Descobrindo e adicionando grupos automaticamente...' 
+        });
         
         const grupos = await this.descobrirGrupos(sock);
         let adicionados = 0;
@@ -296,7 +364,7 @@ class AdminSystem {
         });
         
         await sock.sendMessage(jid, { 
-            text: `✅ ${adicionados} grupos adicionados automaticamente!\nUse /list para ver todos.` 
+            text: `✅ **${adicionados} grupos** adicionados automaticamente!\n\n📋 Use \`/list\` para ver todos\n🚀 Use \`/send\` para testar envio` 
         });
         
         return true;
