@@ -4,7 +4,7 @@ const MarketingAutomatico = require('./marketing');
 class AdminSystem {
     constructor() {
         this.adminNumbers = [
-            '556298577568@s.whatsapp.net', // Substitua pelo seu número
+            '5511999999999@s.whatsapp.net', // Substitua pelo seu número
             // Adicione outros números admin se precisar
         ];
         this.marketing = null;
@@ -54,6 +54,12 @@ class AdminSystem {
                 
                 case '/send':
                     return await this.enviarAgora(sock, jid);
+                
+                case '/groups':
+                    return await this.listarTodosGrupos(sock, jid);
+                
+                case '/auto':
+                    return await this.autoAddGrupos(sock, jid);
                 
                 default:
                     return false;
@@ -209,6 +215,8 @@ class AdminSystem {
 
 📤 **Envios:**
 • \`/send\` - Enviar marketing agora
+• \`/groups\` - Ver TODOS os grupos disponíveis
+• \`/auto\` - Adicionar todos os grupos automaticamente
 • \`/help\` - Mostrar esta ajuda
 
 ⚙️ **Sistema automático:** 3x/dia
@@ -237,6 +245,42 @@ class AdminSystem {
             console.error('Erro ao descobrir grupos:', error);
             return [];
         }
+    }
+
+    // Listar todos os grupos que o bot tem acesso
+    async listarTodosGrupos(sock, jid) {
+        await sock.sendMessage(jid, { 
+            text: '🔍 Buscando todos os grupos... Aguarde.' 
+        });
+        
+        const grupos = await this.descobrirGrupos(sock);
+        
+        if (grupos.length === 0) {
+            await sock.sendMessage(jid, { 
+                text: '❌ Nenhum grupo encontrado. O bot precisa estar em grupos primeiro.' 
+            });
+            return true;
+        }
+        
+        let texto = `📋 **TODOS OS GRUPOS DISPONÍVEIS** (${grupos.length})\n\n`;
+        
+        grupos.forEach((grupo, index) => {
+            texto += `${index + 1}. **${grupo.nome}**\n`;
+            texto += `   🆔 \`${grupo.id}\`\n`;
+            texto += `   👥 ${grupo.participantes} membros\n\n`;
+            
+            // Divide em mensagens menores para não dar erro
+            if ((index + 1) % 10 === 0 || index === grupos.length - 1) {
+                sock.sendMessage(jid, { text: texto });
+                texto = '';
+            }
+        });
+        
+        await sock.sendMessage(jid, { 
+            text: '💡 **Para adicionar:** `/add [ID] [NOME]`\n💡 **Adicionar todos:** `/auto`' 
+        });
+        
+        return true;
     }
 
     // Auto-adicionar grupos (comando especial)
