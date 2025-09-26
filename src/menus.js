@@ -16,7 +16,6 @@ async function enviarAvisoMenuPrincipal(sock, jid) {
 /**
  * Envia o menu principal para o usuário
  */
-
 async function enviarMenuPrincipal(sock, jid) {
     try {
         return await sock.sendMessage(jid, {
@@ -38,7 +37,6 @@ async function enviarSubmenuTeste(sock, jid, aparelho) {
         console.error('Erro ao enviar submenu teste:', error);
     }
 }
-
 
 /**
  * Envia mensagem de erro padrão
@@ -64,7 +62,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             fase: 'menu_principal',
             aparelho: null,
             ultimaInteracao: new Date(),
-            ultimoTeste: null // armazena data do último teste
+            ultimoTeste: null
         };
     }
 
@@ -77,34 +75,34 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             // Checa limite de 30 dias
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
-                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas 20$/Mês 🔥`
+                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas R$ 20/Mês 🔥\n\n💬 Digite "Menu" para outras opções.`
                 });
-                // mantém fase ativa
+                // Mantém na fase menu_principal
                 return;
             }
 
-           // Continua pro submenu de aparelhos
+            // Continua pro submenu de aparelhos
             atendimentos[jid].fase = 'submenu_aparelho';
             return await sock.sendMessage(jid, { text: mensagens.submenuAparelho });
 
         case '2':
             atendimentos[jid].ativo = false; // desativa o bot pra esse usuário
             return await sock.sendMessage(jid, { 
-                text: '💬 Tire suas dúvidas com um atendente.\n💡 Digite "Menu" para voltar ao início.' 
+                text: '💬 Tire suas dúvidas sobre nossos planos:\n\n📦 **PLANO MENSAL**: R$ 20/mês\n• Canais SD/HD/4K\n• Filmes e séries\n• Suporte técnico\n\n📦 **PLANO ANUAL**: R$ 200/ano\n• 2 meses grátis\n• Todos os benefícios\n• Desconto especial\n\n💡 Digite "Menu" para voltar ao início.' 
             });
 
         case '3':
             atendimentos[jid].ativo = false;
             return await sock.sendMessage(jid, { 
-                text: '👨‍💻 Um atendente humano irá ajudá-lo em breve.\n💡 Digite "Menu" para voltar ao início.' 
+                text: '👨‍💻 Você será atendido por um humano em breve.\n⏱️ Tempo médio de resposta: 5 minutos\n\n💡 Digite "Menu" para voltar ao início.' 
             });
 
         default:
-            // Mantém fase ativa e envia apenas aviso
             await sock.sendMessage(jid, { text: mensagens.avisoInvalido });
             return;
     }
 }
+
 /**
  * Handler do submenu de aparelhos
  */
@@ -136,7 +134,7 @@ async function handleSubmenuSmartTV(sock, jid, comando, atendimentos) {
     } else if (comando === '2') {
         atendimentos[jid].ativo = false;
         return await sock.sendMessage(jid, { 
-            text: '👨‍💻 Um atendente humano irá ajudá-lo em breve.\n💡 Digite "Menu" para voltar ao início.' 
+            text: '👨‍💻 Um atendente especializado em Smart TVs irá ajudá-lo.\n⏱️ Tempo médio: 5 minutos\n\n💡 Digite "Menu" para voltar ao início.' 
         });
     }
     return await enviarMensagemErro(sock, jid);
@@ -159,7 +157,7 @@ async function handleSubmenuCelular(sock, jid, comando, atendimentos) {
 }
 
 /**
- * Handler do submenu de teste
+ * Handler do submenu de teste - CORRIGIDO
  */
 async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const tipo = comando === '1' ? 'COM_ADULTO' : comando === '2' ? 'SEM_ADULTO' : null;
@@ -168,35 +166,56 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const aparelho = atendimentos[jid].aparelho;
     const apiURL = aparelho === 'SMARTTV' ? API.SMARTTV[tipo] : API.ANDROID_TVBOX[tipo];
 
+    // Mostra mensagem de carregamento
+    await sock.sendMessage(jid, { 
+        text: '⏳ Gerando seu teste... Aguarde alguns segundos...' 
+    });
+
     let tentativa = 0;
     let sucesso = false;
 
     while(tentativa < 3 && !sucesso){
         try {
             console.log(`📡 Tentativa ${tentativa + 1} - Requisição API: ${aparelho} - ${tipo}`);
-            const response = await axios.post(apiURL, {}, { timeout: 10000 });
+            const response = await axios.post(apiURL, {}, { timeout: 15000 });
             
+            // Envia o teste
             await sock.sendMessage(jid, { text: response.data });
 
-            // Atualiza último teste só se sucesso
+            // ✅ CORREÇÃO PRINCIPAL: Volta ao menu principal após enviar teste
             atendimentos[jid].ultimoTeste = new Date();
+            atendimentos[jid].fase = 'menu_principal'; // AQUI É A CORREÇÃO!
+            atendimentos[jid].aparelho = null; // Limpa aparelho selecionado
             sucesso = true;
-            atendimentos[jid].fase = 'menu_principal'; // volta ao menu principal
+            
+            // Envia mensagem de follow-up
+            setTimeout(async () => {
+                await sock.sendMessage(jid, { 
+                    text: '🎉 **Teste enviado com sucesso!**\n\n💡 Gostou da qualidade? Que tal assinar um plano?\n📦 Planos a partir de R$ 20/mês\n\n📱 Digite "Menu" para ver outras opções!' 
+                });
+            }, 2000);
+            
             console.log(`✅ Teste enviado com sucesso para ${jid}`);
+            
         } catch (error) {
             tentativa++;
             console.error(`❌ Tentativa ${tentativa} falhou:`, error.message);
+            
             if(tentativa === 3){
-                // Zera ultimoTeste para liberar outro pedido
-                atendimentos[jid].ultimoTeste = null;
+                // Volta ao menu principal mesmo em caso de erro
+                atendimentos[jid].fase = 'menu_principal';
+                atendimentos[jid].aparelho = null;
+                
                 await sock.sendMessage(jid, { 
-                    text: '❌ Erro ao buscar os dados do teste. Tente novamente mais tarde.' 
+                    text: '❌ **Erro temporário no sistema**\n\nNossos servidores estão sobrecarregados. Tente novamente em alguns minutos.\n\n💡 Digite "Menu" para tentar novamente.' 
                 });
+            } else {
+                // Aguarda antes da próxima tentativa
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
     }
 }
-
 
 module.exports = {
     enviarMenuPrincipal,
