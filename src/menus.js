@@ -75,7 +75,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             // Checa limite de 30 dias
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
-                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n\n📦 **MENSAL**: R$ 20/mês\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n📦 **ANUAL**: R$ 150 (12 meses) 🔥\n\n💬 Digite "Menu" para outras opções.`
+                    text: `❌ Você já gerou um teste nos últimos dias.\n💡 Que tal assinar um plano?\n\n📦 **MENSAL**: R$ 20/mês\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n📦 **ANUAL**: R$ 150 (12 meses) 🔥\n\n💬 Digite "Menu" para outras opções.`
                 });
                 // Mantém na fase menu_principal
                 return;
@@ -94,7 +94,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
         case '3':
             atendimentos[jid].ativo = false;
             return await sock.sendMessage(jid, { 
-                text: '👨‍💻 Você será atendido por um humano em breve.\n⏱️ Tempo médio de resposta: 5 minutos\n\n💡 Digite "Menu" para voltar ao início.' 
+                text: '👨‍💻 Você será atendido em breve.\n⏱️ Tempo médio de resposta: 5 minutos\n\n💡 Digite "Menu" para voltar ao início.' 
             });
 
         default:
@@ -157,7 +157,7 @@ async function handleSubmenuCelular(sock, jid, comando, atendimentos) {
 }
 
 /**
- * Handler do submenu de teste - CORRIGIDO
+ * Handler do submenu de teste - CORRIGIDO + FOLLOW-UP
  */
 async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const tipo = comando === '1' ? 'COM_ADULTO' : comando === '2' ? 'SEM_ADULTO' : null;
@@ -182,20 +182,35 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
             // Envia o teste
             await sock.sendMessage(jid, { text: response.data });
 
-            // ✅ CORREÇÃO PRINCIPAL: Volta ao menu principal após enviar teste
+            // ✅ REGISTRA TESTE NO SISTEMA DE FOLLOW-UP
+            const { getFollowUpSystem } = require('./bot');
+            const followUpSystem = getFollowUpSystem();
+            if (followUpSystem) {
+                // ✅ CORREÇÃO: Mapear aparelho corretamente
+                let aparelhoCorreto = aparelho;
+                if (aparelho === 'TVBOX') aparelhoCorreto = 'ANDROID'; // TV Box usa API Android
+                if (aparelho === 'ANDROID') aparelhoCorreto = 'ANDROID'; // Android
+                if (aparelho === 'IOS') aparelhoCorreto = 'IOS'; // iOS  
+                if (aparelho === 'SMARTTV') aparelhoCorreto = 'SMARTTV'; // Smart TV
+                
+                followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+            }
+
+            // Volta ao menu principal após enviar teste
             atendimentos[jid].ultimoTeste = new Date();
-            atendimentos[jid].fase = 'menu_principal'; // AQUI É A CORREÇÃO!
-            atendimentos[jid].aparelho = null; // Limpa aparelho selecionado
+            atendimentos[jid].fase = 'menu_principal';
+            atendimentos[jid].aparelho = null;
             sucesso = true;
             
             // Envia mensagem de follow-up
             setTimeout(async () => {
+                const duracao = (aparelhoCorreto === 'SMARTTV' || aparelhoCorreto === 'IOS') ? '6 horas' : '4 horas';
                 await sock.sendMessage(jid, { 
-                    text: '🎉 **Teste enviado com sucesso!**\n\n💡 Gostou da qualidade? Que tal assinar um plano?\n📦 Planos a partir de R$ 20/mês\n\n📱 Digite "Menu" para ver outras opções!' 
+                    text: `🎉 **Teste enviado com sucesso!**\n\n💡 Aproveite as ${duracao} de acesso completo!\n📺 Teste todos os canais e qualidade\n\n⏰ **Importante:** Você receberá um aviso antes do teste expirar\n\n📱 Digite "Menu" se precisar de algo!` 
                 });
-            }, 2000);
+            }, 3000);
             
-            console.log(`✅ Teste enviado com sucesso para ${jid}`);
+            console.log(`✅ Teste enviado e registrado para ${jid}`);
             
         } catch (error) {
             tentativa++;
