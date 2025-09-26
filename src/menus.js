@@ -1,6 +1,7 @@
 const axios = require('axios');
 const mensagens = require('./mensagens');
 const API = require('./api');
+const { getFollowUpSystem } = require('./bot');
 
 /**
  * Envia aviso de opção inválida no menu principal
@@ -30,6 +31,11 @@ async function enviarMenuPrincipal(sock, jid) {
  * Envia o submenu de teste
  */
 async function enviarSubmenuTeste(sock, jid, aparelho) {
+    const followUpSystem = getFollowUpSystem();
+    if (followUpSystem) {
+        followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+    }
+
     try {
         await sock.sendMessage(jid, { text: mensagens.submenuTeste });
         return { fase: 'submenu_teste', aparelho };
