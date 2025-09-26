@@ -1,8 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const followUpSystem = new FollowUpSystem();
-const adminSystem = new AdminSystem(followUpSystem);
-
+const AdminSystem = require('./admin');
+const FollowUpSystem = require('./followup'); // NOVA LINHA
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
@@ -55,7 +54,7 @@ async function startBot(io) {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
+                const shouldReconnect = lastDisconnected?.error?.output?.statusCode !== 401;
                 console.log('⚠️ Conexão fechada, reconectando:', shouldReconnect);
                 
                 if (shouldReconnect) {
