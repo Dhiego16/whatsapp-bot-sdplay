@@ -4,16 +4,11 @@ const MarketingAutomatico = require('./marketing');
 class AdminSystem {
     constructor() {
         this.adminNumbers = [
-            '556298577568@s.whatsapp.net', // ⚠️ SUBSTITUA pelo seu número
+            '5511999999999@s.whatsapp.net', // ⚠️ SUBSTITUA pelo seu número
             // Adicione outros números admin se precisar
         ];
         this.marketing = null;
     }
-    
-    async listarTestesAtivos(sock, jid) {
-    const lista = this.followUpSystem.listarTestesAtivos();
-    await sock.sendMessage(jid, { text: lista });
-}
 
     // Inicializa com o socket do WhatsApp
     init(sock) {
@@ -68,7 +63,7 @@ class AdminSystem {
                 
                 case '/tests':
                     return await this.listarTestesAtivos(sock, jid);
-
+                
                 case '/finish':
                     return await this.finalizarTeste(sock, jid, args);
                 
