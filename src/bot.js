@@ -2,6 +2,14 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 const pino = require('pino');
 const AdminSystem = require('./admin');
 const FollowUpSystem = require('./followup'); // NOVA LINHA
+const followUpSystem = new FollowUpSystem();
+
+// Função para expor em outros arquivos
+function getFollowUpSystem() {
+    return followUpSystem;
+}
+
+module.exports = { getFollowUpSystem };
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
@@ -69,7 +77,7 @@ async function startBot(io) {
                 // Inicializar sistemas
                 adminSystem.init(sock);
                 followUpSystem.init(sock); // NOVA LINHA
-                
+
                 io.emit('connected');
             }
         });
