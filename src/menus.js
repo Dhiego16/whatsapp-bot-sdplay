@@ -75,7 +75,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
             // Checa limite de 30 dias
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
-                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n📦 Plano Mensal Apenas R$ 20/Mês 🔥\n\n💬 Digite "Menu" para outras opções.`
+                    text: `❌ Você já gerou um teste nos últimos 30 dias.\n💡 Que tal assinar um plano?\n\n📦 **MENSAL**: R$ 20/mês\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n📦 **ANUAL**: R$ 150 (12 meses) 🔥\n\n💬 Digite "Menu" para outras opções.`
                 });
                 // Mantém na fase menu_principal
                 return;
@@ -88,7 +88,7 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
         case '2':
             atendimentos[jid].ativo = false; // desativa o bot pra esse usuário
             return await sock.sendMessage(jid, { 
-                text: '💬 Tire suas dúvidas sobre nossos planos:\n\n📦 **PLANO MENSAL**: R$ 20/mês\n• Canais SD/HD/4K\n• Filmes e séries\n• Suporte técnico\n\n📦 **PLANO ANUAL**: R$ 200/ano\n• 2 meses grátis\n• Todos os benefícios\n• Desconto especial\n\n💡 Digite "Menu" para voltar ao início.' 
+                text: '💬 **NOSSOS PLANOS SD PLAY** 🔥\n\n📦 **MENSAL**: R$ 20/mês\n• Todos os canais HD/4K\n• Filmes e séries atualizados\n• Suporte técnico 24h\n\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n• Economia de R$ 10\n• Todos os benefícios\n\n📦 **ANUAL**: R$ 150 (12 meses)\n• Economia de R$ 90 🤑\n• Melhor custo-benefício\n• Prioridade no suporte\n\n💡 Digite "Menu" para outras opções ou fale com atendente!' 
             });
 
         case '3':
