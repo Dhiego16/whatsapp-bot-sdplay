@@ -1,7 +1,8 @@
 const axios = require('axios');
 const mensagens = require('./mensagens');
 const API = require('./api');
-const { getFollowUpSystem } = require('./bot');
+
+// ❌ REMOVIDO: const { getFollowUpSystem } = require('./bot'); - causava erro circular
 
 /**
  * Envia aviso de opção inválida no menu principal
@@ -28,11 +29,9 @@ async function enviarMenuPrincipal(sock, jid) {
 }
 
 /**
- * Envia o submenu de teste - REMOVIDO REGISTRO DUPLICADO
+ * Envia o submenu de teste
  */
 async function enviarSubmenuTeste(sock, jid, aparelho) {
-    // ❌ REMOVIDO: followUpSystem.registrarTeste() - estava duplicando!
-    
     try {
         await sock.sendMessage(jid, { text: mensagens.submenuTeste });
         return { fase: 'submenu_teste', aparelho };
@@ -160,7 +159,7 @@ async function handleSubmenuCelular(sock, jid, comando, atendimentos) {
 }
 
 /**
- * Handler do submenu de teste - TOTALMENTE CORRIGIDO
+ * Handler do submenu de teste - TOTALMENTE CORRIGIDO SEM DEPENDÊNCIA CIRCULAR
  */
 async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const tipo = comando === '1' ? 'COM_ADULTO' : comando === '2' ? 'SEM_ADULTO' : null;
@@ -193,11 +192,16 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
             });
 
             if (response.status === 200) {
-                // ✅ REGISTRA FOLLOW-UP APENAS 1 VEZ E APÓS SUCESSO
-                const followUpSystem = getFollowUpSystem();
-                if (followUpSystem) {
-                    followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
-                    console.log(`📝 Follow-up registrado para ${jid}`);
+                // ✅ CORREÇÃO: Acesso direto ao followUpSystem via require dinâmico
+                try {
+                    const { getFollowUpSystem } = require('./bot');
+                    const followUpSystem = getFollowUpSystem();
+                    if (followUpSystem) {
+                        followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+                        console.log(`📝 Follow-up registrado para ${jid}`);
+                    }
+                } catch (followUpError) {
+                    console.log(`⚠️ Follow-up não disponível (${followUpError.message}), mas teste continua...`);
                 }
 
                 // Define mensagem do app baseado no aparelho
