@@ -22,7 +22,37 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
 
-// Rotas
+// ✅ NOVO: Keep alive para Render (CRÍTICO)
+app.get('/keep-alive', (req, res) => {
+    const sock = getSock();
+    const status = sock ? 'connected' : 'disconnected';
+    
+    res.json({ 
+        status: 'alive', 
+        whatsapp: status,
+        timestamp: new Date().toISOString(),
+        memory: process.memoryUsage(),
+        uptime: Math.floor(process.uptime()) + 's'
+    });
+});
+
+// ✅ NOVO: Health check detalhado
+app.get('/health', (req, res) => {
+    const { getFollowUpSystem } = require('./bot');
+    const followUpSystem = getFollowUpSystem();
+    
+    const stats = followUpSystem ? followUpSystem.getEstatisticas() : null;
+    
+    res.json({
+        server: 'ok',
+        whatsapp: getSock() ? 'connected' : 'disconnected',
+        followUp: stats,
+        memory: process.memoryUsage(),
+        uptime: process.uptime()
+    });
+});
+
+// Rotas existentes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public', 'index.html'));
 });
@@ -73,6 +103,24 @@ app.get('/reset', (req, res) => {
     }
 });
 
+// ✅ CRÍTICO: Auto ping para evitar sleep do Render
+if (process.env.NODE_ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+    const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+    
+    // Ping a cada 10 minutos para manter ativo
+    setInterval(async () => {
+        try {
+            const response = await fetch(`${RENDER_URL}/keep-alive`);
+            const data = await response.json();
+            console.log(`🔄 Keep-alive ping: ${data.status} - WhatsApp: ${data.whatsapp}`);
+        } catch (error) {
+            console.error('❌ Erro no keep-alive:', error.message);
+        }
+    }, 10 * 60 * 1000); // 10 minutos
+    
+    console.log(`🚀 Keep-alive configurado para: ${RENDER_URL}`);
+}
+
 // Socket.IO para comunicação em tempo real
 io.on('connection', (socket) => {
     console.log('🔌 Cliente conectado:', socket.id);
@@ -82,13 +130,14 @@ io.on('connection', (socket) => {
     });
 });
 
-// Tratamento de erros não capturados
+// ✅ MELHORADO: Tratamento de erros
 process.on('uncaughtException', (error) => {
-    console.error('❌ Erro não capturado:', error);
+    console.error('❌ Erro não capturado:', error.message);
+    // Não encerra o processo no Render
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Promise rejeitada não tratada:', reason);
+    console.error('❌ Promise rejeitada:', reason);
 });
 
 // Graceful shutdown
@@ -100,11 +149,16 @@ process.on('SIGINT', () => {
     });
 });
 
-// Inicia o servidor
+// ✅ MELHORADO: Log de inicialização
 server.listen(PORT, () => {
     console.log('🌐 Servidor rodando em http://localhost:' + PORT);
-    console.log('🔄 Para resetar a sessão: http://localhost:' + PORT + '/reset?token=' + RESET_TOKEN);
-    console.log('📊 Status da API: http://localhost:' + PORT + '/status');
+    console.log('🔄 Reset: http://localhost:' + PORT + '/reset?token=' + RESET_TOKEN);
+    console.log('📊 Health: http://localhost:' + PORT + '/health');
+    console.log('💓 Keep-alive: http://localhost:' + PORT + '/keep-alive');
+    
+    if (process.env.RENDER_EXTERNAL_URL) {
+        console.log('🚀 Render URL:', process.env.RENDER_EXTERNAL_URL);
+    }
 });
 
 // Inicia o bot
