@@ -1,7 +1,9 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const AdminSystem = require('./admin');
-const FollowUpSystem = require('./followup'); // NOVA LINHA
+const FollowUpSystem = require('./followup');
+
+// ✅ CORRIGIDO: Só UMA declaração do followUpSystem
 const followUpSystem = new FollowUpSystem();
 
 // Função para expor em outros arquivos
@@ -9,7 +11,6 @@ function getFollowUpSystem() {
     return followUpSystem;
 }
 
-module.exports = { getFollowUpSystem };
 const {
     enviarMenuPrincipal,
     handleMenuPrincipal,
@@ -23,7 +24,6 @@ const AUTH_DIR = './auth_test';
 let sock;
 const atendimentos = {};
 const adminSystem = new AdminSystem();
-const followUpSystem = new FollowUpSystem(); // NOVA LINHA
 
 // Mapeamento de handlers por fase
 const handlers = {
@@ -76,7 +76,7 @@ async function startBot(io) {
                 
                 // Inicializar sistemas
                 adminSystem.init(sock);
-                followUpSystem.init(sock); // NOVA LINHA
+                followUpSystem.init(sock);
 
                 io.emit('connected');
             }
@@ -93,7 +93,7 @@ async function startBot(io) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             const comando = texto.toLowerCase().trim();
 
-            // NOVA FUNCIONALIDADE: Verificar comandos administrativos primeiro
+            // Verificar comandos administrativos primeiro
             if (texto.startsWith('/')) {
                 const isAdminCommand = await adminSystem.processarComando(sock, jid, texto);
                 if (isAdminCommand) return; // Se foi comando admin, para aqui
@@ -181,5 +181,5 @@ module.exports = {
     getSock: () => sock,
     getAtendimentos: () => atendimentos,
     getAdminSystem: () => adminSystem,
-    getFollowUpSystem: () => followUpSystem // NOVA LINHA
+    getFollowUpSystem: () => followUpSystem
 };
