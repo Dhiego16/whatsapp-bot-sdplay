@@ -28,14 +28,11 @@ async function enviarMenuPrincipal(sock, jid) {
 }
 
 /**
- * Envia o submenu de teste
+ * Envia o submenu de teste - REMOVIDO REGISTRO DUPLICADO
  */
 async function enviarSubmenuTeste(sock, jid, aparelho) {
-    const followUpSystem = getFollowUpSystem();
-    if (followUpSystem) {
-        followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
-    }
-
+    // ❌ REMOVIDO: followUpSystem.registrarTeste() - estava duplicando!
+    
     try {
         await sock.sendMessage(jid, { text: mensagens.submenuTeste });
         return { fase: 'submenu_teste', aparelho };
@@ -58,7 +55,7 @@ async function enviarMensagemErro(sock, jid) {
 }
 
 /**
- * Handler do menu principal
+ * Handler do menu principal - CORRIGIDO LIMITE DE TESTE
  */
 async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
     // Inicializa o objeto do cliente se não existir
@@ -72,22 +69,22 @@ async function handleMenuPrincipal(sock, jid, comando, atendimentos) {
         };
     }
 
-    const hoje = new Date();
-    const ultimoTeste = atendimentos[jid].ultimoTeste;
-    const diffDias = ultimoTeste ? Math.floor((hoje - new Date(ultimoTeste)) / (1000 * 60 * 60 * 24)) : null;
-
     switch (comando) {
         case '1':
-            // Checa limite de 30 dias
+            // ✅ CORRIGIDO: Verifica limite ANTES de prosseguir
+            const hoje = new Date();
+            const ultimoTeste = atendimentos[jid].ultimoTeste;
+            const diffDias = ultimoTeste ? Math.floor((hoje - new Date(ultimoTeste)) / (1000 * 60 * 60 * 24)) : null;
+            
             if (ultimoTeste && diffDias < 30) {
                 await sock.sendMessage(jid, {
-                    text: `❌ Você já gerou um teste nos últimos dias.\n💡 Que tal assinar um plano?\n\n📦 **MENSAL**: R$ 20/mês\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n📦 **ANUAL**: R$ 150 (12 meses) 🔥\n\n💬 Digite "Menu" para outras opções.`
+                    text: `❌ Você já gerou um teste nos últimos ${30 - diffDias} dias.\n💡 Que tal assinar um plano?\n\n📦 **MENSAL**: R$ 20/mês\n📦 **TRIMESTRAL**: R$ 50 (3 meses)\n📦 **ANUAL**: R$ 150 (12 meses) 🔥\n\n💬 Digite "Menu" para outras opções.`
                 });
-                // Mantém na fase menu_principal
-                return;
+                return; // Não prossegue se já testou
             }
 
-            // Continua pro submenu de aparelhos
+            // ✅ CORRIGIDO: Marca que tentou teste ANTES da API (evita spam)
+            atendimentos[jid].ultimoTeste = new Date();
             atendimentos[jid].fase = 'submenu_aparelho';
             return await sock.sendMessage(jid, { text: mensagens.submenuAparelho });
 
@@ -163,7 +160,7 @@ async function handleSubmenuCelular(sock, jid, comando, atendimentos) {
 }
 
 /**
- * Handler do submenu de teste - CORRIGIDO + FOLLOW-UP
+ * Handler do submenu de teste - TOTALMENTE CORRIGIDO
  */
 async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const tipo = comando === '1' ? 'COM_ADULTO' : comando === '2' ? 'SEM_ADULTO' : null;
@@ -172,8 +169,13 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     const aparelho = atendimentos[jid].aparelho;
     const apiURL = aparelho === 'SMARTTV' ? API.SMARTTV[tipo] : API.ANDROID_TVBOX[tipo];
 
-    // 🔥 Declara antes do loop
-    let aparelhoCorreto = aparelho;
+    // ✅ CORRIGIDO: Mapeia aparelho ANTES de usar
+    let aparelhoCorreto;
+    if (aparelho === 'TVBOX') aparelhoCorreto = 'ANDROID';
+    else if (aparelho === 'ANDROID') aparelhoCorreto = 'ANDROID'; 
+    else if (aparelho === 'IOS') aparelhoCorreto = 'IOS';
+    else if (aparelho === 'SMARTTV') aparelhoCorreto = 'SMARTTV';
+    else aparelhoCorreto = 'ANDROID'; // fallback
 
     // Mostra mensagem de carregamento
     await sock.sendMessage(jid, { text: '⏳ Gerando seu teste... Aguarde alguns segundos...' });
@@ -181,41 +183,67 @@ async function handleSubmenuTeste(sock, jid, comando, atendimentos) {
     let tentativa = 0;
     let sucesso = false;
 
-    while(tentativa < 3 && !sucesso){
+    while(tentativa < 3 && !sucesso) {
         try {
-            // ... requisição API ...
+            tentativa++;
+            console.log(`🔄 Tentativa ${tentativa} para ${jid} - ${aparelhoCorreto} - ${tipo}`);
 
-            // Corrige o mapeamento
-            if (aparelho === 'TVBOX') aparelhoCorreto = 'ANDROID';
-            if (aparelho === 'ANDROID') aparelhoCorreto = 'ANDROID';
-            if (aparelho === 'IOS') aparelhoCorreto = 'IOS';
-            if (aparelho === 'SMARTTV') aparelhoCorreto = 'SMARTTV';
+            const response = await axios.get(apiURL, {
+                timeout: 15000 // 15 segundos timeout
+            });
 
-            followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+            if (response.status === 200) {
+                // ✅ REGISTRA FOLLOW-UP APENAS 1 VEZ E APÓS SUCESSO
+                const followUpSystem = getFollowUpSystem();
+                if (followUpSystem) {
+                    followUpSystem.registrarTeste(jid, tipo, aparelhoCorreto);
+                    console.log(`📝 Follow-up registrado para ${jid}`);
+                }
 
-            // Volta ao menu
-            atendimentos[jid].ultimoTeste = new Date();
-            atendimentos[jid].fase = 'menu_principal';
-            atendimentos[jid].aparelho = null;
-            sucesso = true;
+                // Define mensagem do app baseado no aparelho
+                let mensagemApp = '';
+                switch(aparelhoCorreto) {
+                    case 'SMARTTV':
+                        mensagemApp = mensagens.appSmartTV;
+                        break;
+                    case 'ANDROID':
+                        mensagemApp = mensagens.appAndroid;
+                        break;
+                    case 'IOS':
+                        mensagemApp = mensagens.appIOS;
+                        break;
+                    default:
+                        mensagemApp = mensagens.appAndroid;
+                }
 
-            // ✅ Agora a variável está disponível aqui também
-            setTimeout(async () => {
-                const duracao = (aparelhoCorreto === 'SMARTTV' || aparelhoCorreto === 'IOS') ? '6 horas' : '4 horas';
-                await sock.sendMessage(jid, { 
-                    text: `🎉 **Teste enviado com sucesso!**\n\n💡 Aproveite as ${duracao} de acesso completo!\n📺 Teste todos os canais e qualidade`
-                });
-            }, 2000);
+                // Envia resposta da API + instruções do app
+                const mensagemCompleta = `${response.data}\n\n${mensagemApp}\n\n💡 Digite "Menu" para outras opções.`;
+                await sock.sendMessage(jid, { text: mensagemCompleta });
 
-            
-            console.log(`✅ Teste enviado e registrado para ${jid}`);
+                // Mensagem adicional após 3 segundos
+                setTimeout(async () => {
+                    const duracao = (aparelhoCorreto === 'SMARTTV' || aparelhoCorreto === 'IOS') ? '6 horas' : '4 horas';
+                    await sock.sendMessage(jid, { 
+                        text: `🎉 **Teste enviado com sucesso!**\n\n💡 Aproveite as ${duracao} de acesso completo!\n📺 Teste todos os canais e qualidade HD/4K!`
+                    });
+                }, 3000);
+
+                // Volta ao menu principal
+                atendimentos[jid].fase = 'menu_principal';
+                atendimentos[jid].aparelho = null;
+                sucesso = true;
+
+                console.log(`✅ Teste enviado com sucesso para ${jid} - ${aparelhoCorreto}`);
+            }
             
         } catch (error) {
-            tentativa++;
-            console.error(`❌ Tentativa ${tentativa} falhou:`, error.message);
+            console.error(`❌ Tentativa ${tentativa} falhou para ${jid}:`, error.message);
             
-            if(tentativa === 3){
-                // Volta ao menu principal mesmo em caso de erro
+            if(tentativa === 3) {
+                // ✅ CORRIGIDO: Se falhar, volta o ultimoTeste para null (permite nova tentativa)
+                atendimentos[jid].ultimoTeste = null;
+                
+                // Volta ao menu principal
                 atendimentos[jid].fase = 'menu_principal';
                 atendimentos[jid].aparelho = null;
                 
