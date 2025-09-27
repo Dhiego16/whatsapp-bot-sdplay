@@ -1,4 +1,4 @@
-// src/followup.js - Sistema de follow-up para testes
+// src/followup.js - Sistema de follow-up para testes - CORRIGIDO
 const cron = require('node-cron');
 
 class FollowUpSystem {
@@ -12,14 +12,45 @@ class FollowUpSystem {
     init(sock) {
         this.sock = sock;
         this.iniciarMonitoramento();
+        this.iniciarLimpezaAutomatica(); // ✅ NOVO: Previne memory leak
         console.log('⏰ Sistema de follow-up iniciado');
+    }
+
+    // ✅ NOVO: Limpa dados antigos automaticamente (previne memory leak)
+    iniciarLimpezaAutomatica() {
+        // Limpa testes muito antigos a cada 6 horas
+        cron.schedule('0 */6 * * *', () => {
+            this.limparTestesAntigos();
+        }, {
+            timezone: "America/Sao_Paulo"
+        });
+    }
+
+    // ✅ NOVO: Remove testes com mais de 48h (evita memory leak no Render)
+    limparTestesAntigos() {
+        const agora = new Date();
+        const limite48h = 48 * 60 * 60 * 1000; // 48 horas
+        let removidos = 0;
+
+        this.testsAtivos.forEach((teste, jid) => {
+            const idade = agora - teste.criadoEm;
+            if (idade > limite48h) {
+                this.testsAtivos.delete(jid);
+                removidos++;
+            }
+        });
+
+        if (removidos > 0) {
+            console.log(`🗑️ Limpeza automática: ${removidos} testes antigos removidos`);
+            console.log(`📊 Testes ativos restantes: ${this.testsAtivos.size}`);
+        }
     }
 
     // Registra um novo teste
     registrarTeste(jid, tipo, aparelho) {
         const agora = new Date();
         
-        // ✅ CORREÇÃO: Diferentes durações por aparelho
+        // ✅ Diferentes durações por aparelho
         let duracaoHoras;
         if (aparelho === 'SMARTTV' || aparelho === 'IOS') {
             duracaoHoras = 6; // Smart TV e iOS = 6 horas
@@ -30,21 +61,30 @@ class FollowUpSystem {
         const expiraEm = new Date(agora.getTime() + (duracaoHoras * 60 * 60 * 1000));
         const avisoEm = new Date(agora.getTime() + ((duracaoHoras - 0.5) * 60 * 60 * 1000)); // 30min antes
 
+        // ✅ CORRIGIDO: Remove teste anterior se existir (evita duplicação)
+        if (this.testsAtivos.has(jid)) {
+            console.log(`⚠️ Removendo teste anterior de ${jid}`);
+            this.testsAtivos.delete(jid);
+        }
+
         this.testsAtivos.set(jid, {
             criadoEm: agora,
             expiraEm,
             avisoEm,
             tipo,
             aparelho,
-            duracaoHoras, // Armazena a duração para referência
+            duracaoHoras,
             avisoEnviado: false,
-            finalizado: false
+            finalizado: false,
+            followUpEnviado: false // ✅ NOVO: Controla follow-up adicional
         });
 
-        console.log(`📝 Teste registrado para ${jid} - ${aparelho} (${duracaoHoras}h) - Expira em: ${expiraEm.toLocaleString('pt-BR')}`);
+        console.log(`📝 Teste registrado para ${jid} - ${aparelho} (${duracaoHoras}h) - Expira: ${expiraEm.toLocaleString('pt-BR')}`);
         
-        // Agenda o aviso de expiração
-        this.agendarAvisos(jid);
+        // ✅ CORRIGIDO: Só agenda se não estiver no Render free (evita problemas de sleep)
+        if (process.env.NODE_ENV !== 'production') {
+            this.agendarAvisos(jid);
+        }
     }
 
     // Agenda avisos para um teste específico
@@ -52,15 +92,22 @@ class FollowUpSystem {
         const teste = this.testsAtivos.get(jid);
         if (!teste) return;
 
-        // Aviso 30 minutos antes de expirar
-        setTimeout(async () => {
-            await this.enviarAvisoExpiracao(jid);
-        }, teste.avisoEm.getTime() - Date.now());
+        const agora = new Date();
+        const tempoParaAviso = teste.avisoEm.getTime() - agora.getTime();
+        const tempoParaExpiracao = teste.expiraEm.getTime() - agora.getTime();
 
-        // Mensagem final quando expira
-        setTimeout(async () => {
-            await this.enviarMensagemFinal(jid);
-        }, teste.expiraEm.getTime() - Date.now());
+        // Só agenda se for no futuro
+        if (tempoParaAviso > 0) {
+            setTimeout(async () => {
+                await this.enviarAvisoExpiracao(jid);
+            }, tempoParaAviso);
+        }
+
+        if (tempoParaExpiracao > 0) {
+            setTimeout(async () => {
+                await this.enviarMensagemFinal(jid);
+            }, tempoParaExpiracao);
+        }
     }
 
     // Envia aviso de que o teste vai expirar em 30min
@@ -69,7 +116,6 @@ class FollowUpSystem {
         if (!teste || teste.avisoEnviado || teste.finalizado) return;
 
         try {
-            // ✅ Mensagem personalizada por duração
             const tempoTeste = teste.duracaoHoras === 6 ? '6 horas' : '4 horas';
             
             const mensagem = `⏰ **ATENÇÃO: SEU TESTE ESTÁ EXPIRANDO!** ⏰
@@ -95,7 +141,7 @@ class FollowUpSystem {
             console.log(`⏰ Aviso de expiração enviado para ${jid} (${tempoTeste})`);
 
         } catch (error) {
-            console.error(`❌ Erro ao enviar aviso para ${jid}:`, error);
+            console.error(`❌ Erro ao enviar aviso para ${jid}:`, error.message);
         }
     }
 
@@ -105,7 +151,6 @@ class FollowUpSystem {
         if (!teste || teste.finalizado) return;
 
         try {
-            // ✅ Mensagem personalizada por duração
             const tempoTeste = teste.duracaoHoras === 6 ? '6 horas' : '4 horas';
             
             const mensagem = `⏰ **SEU TESTE EXPIROU!** 
@@ -136,21 +181,20 @@ _Não perca essa oferta! Válida só hoje_ ⏰`;
             teste.finalizado = true;
             console.log(`🏁 Mensagem final enviada para ${jid} (${tempoTeste})`);
 
-            // Remove da lista após 24h
+            // ✅ CORRIGIDO: Agenda follow-up adicional para 2h depois
             setTimeout(() => {
-                this.testsAtivos.delete(jid);
-                console.log(`🗑️ Teste removido da lista: ${jid}`);
-            }, 24 * 60 * 60 * 1000);
+                this.enviarFollowUpAdicional(jid);
+            }, 2 * 60 * 60 * 1000); // 2 horas
 
         } catch (error) {
-            console.error(`❌ Erro ao enviar mensagem final para ${jid}:`, error);
+            console.error(`❌ Erro ao enviar mensagem final para ${jid}:`, error.message);
         }
     }
 
     // Follow-up adicional depois de 2 horas (se não comprou)
     async enviarFollowUpAdicional(jid) {
         const teste = this.testsAtivos.get(jid);
-        if (!teste || !teste.finalizado) return;
+        if (!teste || !teste.finalizado || teste.followUpEnviado) return;
 
         try {
             const mensagem = `👋 **Oi! Tudo bem?**
@@ -170,40 +214,43 @@ Vimos que você testou nosso IPTV hoje. O que achou da qualidade?
 _Responde aí, vamos conversar!_ 😊`;
 
             await this.sock.sendMessage(jid, { text: mensagem });
+            teste.followUpEnviado = true;
             console.log(`📞 Follow-up adicional enviado para ${jid}`);
 
+            // ✅ Remove da memória após follow-up final
+            setTimeout(() => {
+                this.testsAtivos.delete(jid);
+                console.log(`🗑️ Teste removido da lista: ${jid}`);
+            }, 60 * 60 * 1000); // Remove após 1 hora
+
         } catch (error) {
-            console.error(`❌ Erro no follow-up adicional para ${jid}:`, error);
+            console.error(`❌ Erro no follow-up adicional para ${jid}:`, error.message);
         }
     }
 
-    // Inicia monitoramento automático (verifica a cada hora)
+    // ✅ MELHORADO: Inicia monitoramento (funciona melhor no Render)
     iniciarMonitoramento() {
         if (this.inicializado) return;
 
-        // Verifica a cada hora se há avisos pendentes
-        cron.schedule('0 * * * *', () => {
+        // ✅ CORRIGIDO: Verifica avisos a cada 30 minutos (mais confiável que setTimeout)
+        cron.schedule('*/30 * * * *', () => {
             this.verificarAvisosPendentes();
         }, {
             timezone: "America/Sao_Paulo"
         });
 
-        // Follow-up adicional - verifica de 2 em 2 horas
-        cron.schedule('0 */2 * * *', () => {
-            this.enviarFollowUpsAdicionais();
-        }, {
-            timezone: "America/Sao_Paulo"
-        });
-
         this.inicializado = true;
-        console.log('✅ Monitoramento de follow-up ativado');
+        console.log('✅ Monitoramento de follow-up ativado (verifica a cada 30min)');
     }
 
-    // Verifica avisos pendentes (backup caso setTimeout falhe)
+    // ✅ MELHORADO: Verifica avisos pendentes (backup confiável para o Render)
     verificarAvisosPendentes() {
         const agora = new Date();
+        let verificados = 0;
         
         this.testsAtivos.forEach(async (teste, jid) => {
+            verificados++;
+            
             // Se passou da hora do aviso e não foi enviado
             if (agora >= teste.avisoEm && !teste.avisoEnviado && !teste.finalizado) {
                 await this.enviarAvisoExpiracao(jid);
@@ -213,24 +260,17 @@ _Responde aí, vamos conversar!_ 😊`;
             if (agora >= teste.expiraEm && !teste.finalizado) {
                 await this.enviarMensagemFinal(jid);
             }
-        });
-    }
 
-    // Envia follow-ups adicionais (2h após expirar)
-    enviarFollowUpsAdicionais() {
-        const agora = new Date();
-        const duasHorasAtras = new Date(agora.getTime() - (2 * 60 * 60 * 1000));
-        
-        this.testsAtivos.forEach(async (teste, jid) => {
-            // Se finalizou há 2 horas, envia follow-up adicional
-            if (teste.finalizado && teste.expiraEm <= duasHorasAtras) {
+            // Follow-up adicional após 2h da expiração
+            const duasHorasAposExpiracao = new Date(teste.expiraEm.getTime() + (2 * 60 * 60 * 1000));
+            if (agora >= duasHorasAposExpiracao && teste.finalizado && !teste.followUpEnviado) {
                 await this.enviarFollowUpAdicional(jid);
-                // Remove após enviar follow-up final
-                setTimeout(() => {
-                    this.testsAtivos.delete(jid);
-                }, 60000);
             }
         });
+
+        if (verificados > 0) {
+            console.log(`🔍 Verificação follow-up: ${verificados} testes checados`);
+        }
     }
 
     // Finaliza um teste manualmente (quando cliente compra)
@@ -238,32 +278,43 @@ _Responde aí, vamos conversar!_ 😊`;
         const teste = this.testsAtivos.get(jid);
         if (teste) {
             teste.finalizado = true;
+            teste.followUpEnviado = true; // ✅ NOVO: Evita follow-up se comprou
             console.log(`✅ Teste finalizado para ${jid} - Motivo: ${motivo}`);
+            
+            // Remove da memória após 5 minutos
+            setTimeout(() => {
+                this.testsAtivos.delete(jid);
+                console.log(`🗑️ Teste removido (cliente comprou): ${jid}`);
+            }, 5 * 60 * 1000);
         }
     }
 
-    // Estatísticas dos testes
+    // ✅ MELHORADO: Estatísticas dos testes
     getEstatisticas() {
         const total = this.testsAtivos.size;
         let ativos = 0;
         let expirados = 0;
         let avisosEnviados = 0;
+        let followUpsEnviados = 0;
 
         this.testsAtivos.forEach(teste => {
-            if (!teste.finalizado) ativos++;
+            if (!teste.finalizado && new Date() < teste.expiraEm) ativos++;
             if (teste.finalizado) expirados++;
             if (teste.avisoEnviado) avisosEnviados++;
+            if (teste.followUpEnviado) followUpsEnviados++;
         });
 
         return {
             totalTestes: total,
             testesAtivos: ativos,
             testesExpirados: expirados,
-            avisosEnviados: avisosEnviados
+            avisosEnviados: avisosEnviados,
+            followUpsEnviados: followUpsEnviados,
+            memoryUsage: `${total} testes na memória`
         };
     }
 
-    // Listar testes ativos (para admin)
+    // ✅ MELHORADO: Listar testes ativos (para admin)
     listarTestesAtivos() {
         if (this.testsAtivos.size === 0) {
             return '📝 Nenhum teste ativo no momento.';
@@ -272,14 +323,23 @@ _Responde aí, vamos conversar!_ 😊`;
         let lista = `⏰ **TESTES ATIVOS** (${this.testsAtivos.size}):\n\n`;
         
         this.testsAtivos.forEach((teste, jid) => {
-    const tempoRestante = Math.ceil((teste.expiraEm - new Date()) / (1000 * 60)); // minutos
-    const status = teste.finalizado ? '🏁' : teste.avisoEnviado ? '⚠️' : '🟢';
-    const duracao = teste.duracaoHoras === 6 ? '6h' : '4h';
-    
-    lista += `${status} ${jid.split('@')[0]}\n`;
-    lista += `   ⏱️ ${tempoRestante > 0 ? `${tempoRestante}min restantes` : 'Expirado'}\n`;
-    lista += `   📱 ${teste.aparelho} (${duracao}) | ${teste.tipo}\n\n`;
-});
+            const agora = new Date();
+            const tempoRestante = Math.ceil((teste.expiraEm - agora) / (1000 * 60)); // minutos
+            
+            let status;
+            if (teste.finalizado) status = '🏁';
+            else if (agora >= teste.expiraEm) status = '⏰';
+            else if (teste.avisoEnviado) status = '⚠️';
+            else status = '🟢';
+            
+            const duracao = teste.duracaoHoras === 6 ? '6h' : '4h';
+            const numeroLimpo = jid.split('@')[0];
+            
+            lista += `${status} ${numeroLimpo}\n`;
+            lista += `   ⏱️ ${tempoRestante > 0 ? `${tempoRestante}min restantes` : 'Expirado'}\n`;
+            lista += `   📱 ${teste.aparelho} (${duracao}) | ${teste.tipo}\n`;
+            lista += `   🕐 Criado: ${teste.criadoEm.toLocaleTimeString('pt-BR')}\n\n`;
+        });
 
         return lista;
     }
